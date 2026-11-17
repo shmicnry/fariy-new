@@ -31,7 +31,7 @@ const fs = require('node:fs');
     await page.getByText('已连接本机服务', {
         exact: true
     }).waitFor();
-    await page.locator('nav a[href="#learning"]').click();
+    await page.locator('#nav a[href="#learning"]').click();
     await page.getByLabel('选择文字文件').setInputFiles('/private/tmp/fairy-assessment-source.docx');
     await page.getByRole('button', {
         name: '上传并学习',
@@ -58,7 +58,7 @@ const fs = require('node:fs');
     const source = (await api('learning/sources'))[0];
     assert.equal(source.file_format, '.docx');
     assert.equal(source.extraction.segments[0].label, 'paragraph:1');
-    await page.locator('nav a[href="#assessments"]').click();
+    await page.locator('#nav a[href="#assessments"]').click();
     await page.getByLabel('测验名称').fill('Synthetic source quiz');
     await page.getByLabel('测验材料', {
         exact: true

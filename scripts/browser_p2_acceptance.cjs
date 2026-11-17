@@ -23,7 +23,7 @@ const assert = require('node:assert/strict');
     await page.getByText('已连接本机服务', {
         exact: true
     }).waitFor();
-    await page.locator('nav a[href="#learning"]').click();
+    await page.locator('#nav a[href="#learning"]').click();
     await page.getByLabel('选择文字文件').setInputFiles({
         name: '植物知识.md',
         mimeType: 'text/markdown',
@@ -42,8 +42,8 @@ const assert = require('node:assert/strict');
         encoding: 'utf8'
     });
     assert.equal(w.status, 0, w.stderr);
-    await page.locator('nav a[href="#overview"]').click();
-    await page.locator('nav a[href="#learning"]').click();
+    await page.locator('#nav a[href="#overview"]').click();
+    await page.locator('#nav a[href="#learning"]').click();
     await page.getByPlaceholder('练习答案').fill('植物生长需要阳光。');
     await page.getByPlaceholder('用于支持答案的原文摘录').fill('植物需要阳光和水分。');
     await page.getByRole('button', {
@@ -63,7 +63,7 @@ const assert = require('node:assert/strict');
         exact: true
     }).click();
     await page.getByText(/原文位置 0/).waitFor();
-    await page.locator('nav a[href="#world"]').click();
+    await page.locator('#nav a[href="#world"]').click();
     await page.getByLabel('来源标签 植物知识.md').selectOption('primary');
     await page.getByLabel('复核理由 植物知识.md').fill('人工核对了材料出处');
     await Promise.all([
@@ -101,7 +101,7 @@ const assert = require('node:assert/strict');
     }).waitFor({
         state: 'detached'
     });
-    await page.locator('nav a[href="#learning"]').click();
+    await page.locator('#nav a[href="#learning"]').click();
     await page.getByRole('button', {
         name: '评定练习与查看效果',
         exact: true
@@ -126,7 +126,7 @@ const assert = require('node:assert/strict');
         name: '归纳为习得知识',
         exact: true
     }).waitFor();
-    await page.locator('nav a[href="#world"]').click();
+    await page.locator('#nav a[href="#world"]').click();
     await page.getByText('删除这份来源', {
         exact: true
     }).click();

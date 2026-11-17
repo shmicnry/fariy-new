@@ -269,6 +269,73 @@ export async function renderConversation(ui) {
     ], 'auto');
     const text = field(ui, p, '输入消息', '', 'textarea');
     text.placeholder = '例如：请记住，我喜欢喝茉莉花茶。';
+    const speechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const voiceInput = ui.el('button', '语音输入');
+    const speakReply = ui.el('button', '朗读最新回答');
+    voiceInput.setAttribute('aria-label', '语音输入');
+    speakReply.setAttribute('aria-label', '朗读最新回答');
+    if (!speechRecognition) {
+        voiceInput.disabled = true;
+        voiceInput.title = '当前浏览器不提供语音识别';
+    }
+    if (!('speechSynthesis' in window)) {
+        speakReply.disabled = true;
+        speakReply.title = '当前浏览器不提供语音合成';
+    }
+    const speechStatus = ui.el(
+        'p',
+        speechRecognition
+            ? '浏览器语音识别可能由系统或浏览器供应商处理音频；这不经过 Fairy 云模型，但不等于本地识别。'
+            : '当前浏览器不提供语音识别；文字对话仍可使用。',
+        'muted'
+    );
+    const composerTools = ui.el('div', undefined, 'composer-tools');
+    composerTools.append(voiceInput, speakReply);
+    p.append(composerTools, speechStatus);
+    let recognition = null;
+    voiceInput.onclick = () => {
+        if (!speechRecognition) return;
+        if (recognition) {
+            recognition.stop();
+            recognition = null;
+            voiceInput.textContent = '语音输入';
+            speechStatus.textContent = '';
+            return;
+        }
+        recognition = new speechRecognition();
+        recognition.lang = 'zh-CN';
+        recognition.interimResults = true;
+        recognition.continuous = false;
+        const before = text.value.trim();
+        recognition.onresult = event => {
+            let transcript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                transcript += event.results[i][0].transcript;
+            }
+            text.value = [before, transcript.trim()].filter(Boolean).join(' ');
+        };
+        recognition.onerror = event => {
+            speechStatus.textContent = '语音输入失败：' + event.error;
+        };
+        recognition.onend = () => {
+            recognition = null;
+            voiceInput.textContent = '语音输入';
+            speechStatus.textContent = text.value ? '语音已转为可编辑文字。' : '';
+        };
+        voiceInput.textContent = '停止听写';
+        speechStatus.textContent = '正在听写……';
+        recognition.start();
+    };
+    let latestTurns = [];
+    speakReply.onclick = () => {
+        const reply = [...latestTurns].reverse().find(turn => turn.reply)?.reply;
+        if (!reply || !('speechSynthesis' in window)) return;
+        speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(reply);
+        utterance.lang = 'zh-CN';
+        speechSynthesis.speak(utterance);
+        speechStatus.textContent = '正在朗读最新回答。';
+    };
     const progress = ui.el('p', '记忆提案需要你在「记忆审阅」中确认。', 'muted');
     p.append(progress);
     let inFlight = false;
@@ -298,6 +365,7 @@ export async function renderConversation(ui) {
     history.append(output);
     async function refresh() {
         const turns = await ui.api('turns');
+        latestTurns = turns;
         if (!output.isConnected) return;
         output.replaceChildren();
         if (!turns.length) output.append(ui.el('p', '从一条消息开始。', 'muted'));

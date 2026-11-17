@@ -1,0 +1,25 @@
+{
+  "name": "Fairy 个人 AI 助手",
+  "short_name": "Fairy",
+  "description": "本地优先、可审阅、可追溯的个人 AI 助手",
+  "start_url": "/#overview",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#edf2f5",
+  "theme_color": "#edf2f5",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/assets/fairy-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/fairy-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

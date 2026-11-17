@@ -36,7 +36,7 @@ const assert = require('node:assert/strict');
     }).click();
     await page.getByText('已连接本机服务').waitFor();
     const route = async hash => {
-        await page.locator('nav a[href="#' + hash + '"]').click();
+        await page.locator('#nav a[href="#' + hash + '"]').click();
         await page.waitForTimeout(150)
     };
     const request = async path => {

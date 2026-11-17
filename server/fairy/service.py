@@ -554,8 +554,10 @@ class Service:
             return view(r)
 
     def configure(self, revision, data):
-        if data.get("mac_execute") or data.get("autonomous_paid"):
+        if data.get("autonomous_paid"):
             fail(422, "capability_not_implemented_cannot_enable")
+        if data.get("mac_execute") and not data.get("mac_allowed_apps"):
+            fail(422, "mac_execute_requires_allowed_apps")
         if not 0 <= data.get("daily_minutes", 45) <= 240:
             fail(422, "invalid_daily_budget")
         with self.db.tx() as s:

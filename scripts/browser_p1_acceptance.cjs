@@ -50,7 +50,7 @@ const assert = require('node:assert/strict');
         exact: true
     }).waitFor();
     const route = async value => {
-        await page.locator('nav a[href="#' + value + '"]').click()
+        await page.locator('#nav a[href="#' + value + '"]').click()
     };
     await route('models');
     await page.getByRole('button', {

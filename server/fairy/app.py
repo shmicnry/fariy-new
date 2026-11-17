@@ -19,6 +19,10 @@ from .learning import LearningService
 from .knowledge import KnowledgeService
 from .assessments import AssessmentService, QuizInput, RunInput
 from .link_fetch import fetch_text, validate_url
+from .mac_bridge import MacBridge
+from .skills import SkillGrantInput, SkillInvokeInput, SkillService
+from .autonomy import AutonomyService
+from .evolution import EvolutionService, ExperimentInput
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -116,6 +120,17 @@ class Config(Strict):
     autonomous_paid: bool = False
     mac_allowed_apps: list[str] = Field(default_factory=list, max_length=16)
     mac_allowed_paths: list[str] = Field(default_factory=list, max_length=16)
+    autonomy_enabled: bool = False
+    autonomy_daily_minutes: int = Field(default=30, ge=0, le=240)
+    autonomy_daily_items: int = Field(default=10, ge=0, le=100)
+
+
+class CandidateChoice(Strict):
+    revision: int = Field(ge=1)
+
+
+class EvolutionApproval(Strict):
+    candidate: str = Field(min_length=1, max_length=80)
 
 
 class Choice(Strict):
@@ -130,11 +145,19 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     service = MemoryService(db)
     model_settings = ModelSettings(db, secrets_dir=secrets_dir)
     router = ModelRouter(service, model_settings, transport=transport)
-    app = FastAPI(title="Fairy Core", version="0.2.0")
+    skill_service = SkillService(db)
+    mac_bridge = MacBridge(service)
+    autonomy = AutonomyService(db)
+    evolution = EvolutionService(db)
+    app = FastAPI(title="Fairy Core", version="0.3.0")
     app.state.db = db
     app.state.service = service
     app.state.model_settings = model_settings
     app.state.router = router
+    app.state.skills = skill_service
+    app.state.mac_bridge = mac_bridge
+    app.state.autonomy = autonomy
+    app.state.evolution = evolution
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -155,7 +178,14 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
         from fastapi.responses import JSONResponse
 
         host = request.url.hostname
-        if host not in ("127.0.0.1", "localhost", "::1", "testserver"):
+        trusted_hosts = {"127.0.0.1", "localhost", "::1", "testserver"}
+        if os.getenv("FAIRY_ALLOW_LAN") == "1":
+            trusted_hosts.update(
+                item.strip().casefold()
+                for item in os.getenv("FAIRY_ALLOWED_HOSTS", "").split(",")
+                if item.strip()
+            )
+        if (host or "").casefold() not in trusted_hosts:
             return JSONResponse({"detail": "loopback_host_required"}, status_code=421)
         origin = request.headers.get("origin")
         if origin:
@@ -193,10 +223,15 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
 
     @app.get("/healthz")
     def health():
-        return {"status": "ok", "version": "0.2.0", "runtime": "development"}
+        return {"status": "ok", "version": "0.3.0", "runtime": "development"}
 
     @api.get("/capabilities")
     def capabilities():
+        with db.sessions() as session:
+            configured = [
+                row for row in service.rows(session, "config") if row.status == "active"
+            ]
+            config = json.loads(configured[0].payload) if configured else {}
         return {
             "scope": "owner",
             "principal": "confirmed_by_token",
@@ -211,7 +246,14 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "source_review": True,
             "world_claims": True,
             "fixed_choice_assessments": True,
-            "mac_execute": False,
+            "skills_registry": True,
+            "mac_read_only": True,
+            "autonomy_queue": True,
+            "evolution_lab": True,
+            "mac_execute": bool(config.get("mac_execute")),
+            "mac_execute_scope": (
+                "allowlisted_app_launch" if config.get("mac_execute") else "disabled"
+            ),
             "video": False,
             "automatic_mastery": False,
             "vector_search": False,
@@ -596,6 +638,74 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     def jobs():
         return service.list("job")
 
+    @api.get("/mac/status")
+    def mac_status():
+        return mac_bridge.status()
+
+    @api.get("/mac/apps")
+    def mac_apps():
+        return mac_bridge.applications()
+
+    @api.get("/mac/files")
+    def mac_files(path: str = Query(min_length=1, max_length=2000)):
+        return mac_bridge.files(path)
+
+    @api.get("/skills/registry")
+    def skill_registry():
+        return skill_service.list("skill_package")
+
+    @api.post("/skills/registry/{id}/install")
+    def install_skill(id: str):
+        return skill_service.install(id)
+
+    @api.post("/skills/registry/{id}/grant")
+    def grant_skill(id: str, body: SkillGrantInput):
+        return skill_service.grant(id, body)
+
+    @api.post("/skills/registry/{id}/disable")
+    def disable_skill(id: str):
+        return skill_service.disable(id)
+
+    @api.post("/skills/registry/{id}/invoke")
+    async def invoke_skill(id: str, body: SkillInvokeInput):
+        return await skill_service.invoke(id, body)
+
+    @api.get("/autonomy/budget")
+    def autonomy_budget():
+        return autonomy.budget()
+
+    @api.get("/autonomy/candidates")
+    def autonomy_candidates():
+        return autonomy.list("autonomy_candidate")
+
+    @api.post("/autonomy/refresh")
+    def refresh_autonomy():
+        return autonomy.refresh()
+
+    @api.post("/autonomy/candidates/{id}/accept")
+    def accept_candidate(id: str, body: CandidateChoice):
+        return autonomy.accept(id, body.revision)
+
+    @api.post("/autonomy/candidates/{id}/dismiss")
+    def dismiss_candidate(id: str, body: CandidateChoice):
+        return autonomy.dismiss(id, body.revision)
+
+    @api.get("/evolution/experiments")
+    def experiments():
+        return evolution.list("evolution_experiment")
+
+    @api.post("/evolution/experiments")
+    def create_experiment(body: ExperimentInput, k=Depends(key)):
+        return evolution.create(body, k)
+
+    @api.post("/evolution/experiments/{id}/approve")
+    def approve_experiment(id: str, body: EvolutionApproval):
+        return evolution.approve(id, body.candidate)
+
+    @api.post("/evolution/experiments/{id}/rollback")
+    def rollback_experiment(id: str):
+        return evolution.rollback(id)
+
     @api.get("/cognition/snapshot")
     def cognition():
         return {
@@ -673,6 +783,14 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
         @app.get("/")
         def home():
             return FileResponse(root / "index.html")
+
+        @app.get("/service-worker.js")
+        def service_worker():
+            return FileResponse(
+                root / "service-worker.js",
+                media_type="application/javascript",
+                headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+            )
 
     return app
 

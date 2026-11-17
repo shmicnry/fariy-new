@@ -1,12 +1,14 @@
 # Fairy · fariy-new
 
+最新阶段：[P3–P5 可运行纵切交付与验证](docs/implementation/P3-P5-纵切交付与验证.md)。新增技能生命周期、受限 Mac 桥、iPhone PWA、SwiftUI 双平台页面、自主候选预算与隔离进化实验。
+
 最新审计：[P2缺漏审计与修复](docs/implementation/P2审计修复.md)。修复文件幂等、学习结论撤销、精确最终依据、来源失效、测验取消和撤回入口等问题；最终在隔离 Postgres 16 上 **108 项回归全部通过**。
 
 最新P2：[学习、来源与世界知识闭环](docs/implementation/P2学习与世界知识.md)。新增链接登记、来源复核、带出处的知识主张、练习评分和效果记录；真实公网采集在当前DNS环境下受阻，详见限制。
 
 最新进展：[P1可靠性收尾与P2文件学习启动](docs/implementation/P1收尾与P2启动.md)。学习中心现支持TXT/Markdown文件、带位置的阅读分块、断点续读和带出处的练习；数据库新增版本迁移与备份恢复命令。
 
-Fairy 0.2 实现 **Ollama 本地主模型 + 可配置云副模型 + 可审阅、可纠正的记忆闭环**。沿用原始 Fairy v4.2 设计，工程按可验证的阶段推进。
+Fairy 0.3 实现 **Ollama 本地主模型 + 可配置云副模型 + 可审阅记忆 + 学习与世界知识 + 技能/Mac + iPhone/Mac 界面 + 自主预算与隔离进化实验**。沿用原始 Fairy v4.2 设计，工程按可验证的阶段推进。
 
 ## 当前可以做什么
 
@@ -15,9 +17,12 @@ Fairy 0.2 实现 **Ollama 本地主模型 + 可配置云副模型 + 可审阅、
 - 每轮可选择自动路由、仅本机、先本机再请副模型协助。云端默认只收到当前问题；额外发送本轮检索到的已确认记忆需要明确选择。
 - 对话生成有逐字出处的记忆提案；确认后才参与长期召回。支持拒绝、查看来源、纠正、版本记录及遗忘。记忆保留逐字原文，同时标明主体和第三人称事实；明确的饮品偏好问句只依据对应主体的已确认记录回答。
 - 纠正会屏蔽相关旧对话来源；来源变化或取消后，旧模型结果不能提交，也不能继续发往云端。
-- 保留文字学习队列、人工验证、非可执行的习得知识、站内笔记审批和 Mac 允许列表预配置。
+- 投喂 TXT/Markdown/PDF/DOCX，按页或段落保留出处，支持练习、固定题测验和来源复核。
+- 技能安装、限时授权、启用和停用分离；Mac 桥可读取状态、应用和允许目录，并可在四层条件满足时启动允许列表中的应用。
+- Mac/iPhone 管理界面具有平台化导航和动画；iPhone 可安装为 PWA，提供浏览器语音输入/朗读，另有 macOS/iOS SwiftUI 页面与 Keychain。
+- 自主候选受每日分钟和候选数量硬预算；隔离进化实验不会自动修改运行版本。
 
-**当前没有 Mac 执行器、完整原生 App、语音视频或自主进化。** 原始设计截图与本次真实运行截图分别保存，能力边界见 [P1 交付记录](docs/implementation/P1-模型与记忆闭环.md)。
+**当前仍没有输入注入、屏幕录制、语音视频、APNs 推送、自动公网选题或自动代码发布。** 这些能力需要真实的 TCC/设备/供应商条件，不能由本地模拟替代。
 
 ## 在这台 Mac 上运行
 
@@ -51,6 +56,21 @@ Ollama 应已启动，且模型已经安装。本次在你的机器上使用已�
 
 当前没有真实云凭证，因此云端路由通过可控 HTTP 服务测试；没有发出付费云请求。模型自报“需要帮助”是升级信号，不能证明回答正确；需要实时数据时，云模型也不会凭空获得联网工具。用户要求补充信息和明确拒绝不会自动升级。
 
+## Mac、iPhone 与 PWA
+
+「Mac 操作」页可配置应用与目录允许范围。`mac_execute` 只有在至少一个允许应用存在时才能开启；开启后仍需要安装并限时授权 `Mac 启动允许应用` 技能。唯一写入动作是 `/usr/bin/open` 启动允许应用，返回结果明确标为“窗口未验证”。不允许任意 shell、参数透传、键盘/指针注入、屏幕录制或文件写入。
+
+管理网页已是可安装 PWA。iPhone 本地用 Safari 连接可信 HTTPS 地址后，可通过“添加到主屏幕”使用大标题、底部标签栏、44pt 控件、毛玻璃和安全区布局。Service Worker 只缓存静态外壳，不缓存 `/v2/` API 数据。
+
+默认 API 只接受回环 Host。物理 iPhone 接入时，应通过可信 HTTPS 反代或 Tailscale Serve，并同时设置：
+
+```sh
+export FAIRY_ALLOW_LAN=1
+export FAIRY_ALLOWED_HOSTS='你的精确HTTPS主机名'
+```
+
+只监听可信私有网络，不应把 `0.0.0.0:8000` 明文暴露到公网。原生 SwiftUI 页面的地址栏可填写该 HTTPS 地址，所有者令牌保存到 Keychain。
+
 ### 体验记忆闭环
 
 1. 在「对话」输入“请记住，我喜欢喝茉莉花茶。”
@@ -80,24 +100,31 @@ python scripts/export_contract.py
 python scripts/acceptance_ollama.py
 ```
 
-P1 基线 **62 项回归通过**；最新P2回归为87项通过、1项Postgres环境测试跳过，详见顶部最新记录。P1阶段，真实 Ollama 和真实浏览器闭环通过。报告与截图：
+P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境测试跳过；P3–P5 完成后在隔离 Postgres 16 上 **119 项全部通过**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
 
 - [P1 实施与验证记录](docs/implementation/P1-模型与记忆闭环.md)
 - [Ollama 实测结果](docs/implementation/p1-ollama-acceptance.json)
 - [浏览器实测结果](docs/implementation/p1-browser-results.json)
 - [P1 运行截图](docs/implementation/screenshots/p1/)
+- [P3–P5 纵切记录](docs/implementation/P3-P5-纵切交付与验证.md)
+- [P3–P5 浏览器结果](docs/implementation/p3-p5-browser-results.json)
+- [P3 Mac 页面截图](docs/implementation/screenshots/p3-mac-desktop.png)
+- [P5 自主与进化截图](docs/implementation/screenshots/p5-autonomy-desktop.png)
+- [iPhone PWA 截图](docs/implementation/screenshots/p4-iphone-layout.png)
 
 云端请求预留在调用日志中，每个回合的每个阶段只派发一次。失败和超时也计入每日次数，超时费用为未知，不自动重试。重启时过期请求标记为结果未知；未过期的 pending 可以在对话或识海页中断。每日次数上限不是金额硬上限。
 
-GitHub Actions 已配置。前次云端 runner 受账号账单/支出限制，未能启动；本机验证独立完成。`compose.yaml` 是已有 Postgres/API/worker 模板，本轮未运行容器验收；Postgres在P1收尾时已通过独立实例回归。Ollama 回环连接目前按宿主进程部署，容器不能把其自身的 `127.0.0.1` 当作宿主 Mac。数据库迁移、Postgres 并发与容器网络仍需专项验收。
+从 `apps/ios/FairyApp` 可运行 `swift build`（macOS）和 iOS Simulator SDK 构建。原生工程仍是 Swift Package 页面与 API 骨架，尚缺签名、App Store target、真机推送和媒体验收。
+
+GitHub Actions 已配置。前次云端 runner 受账号账单/支出限制，未能启动；本机验证独立完成。`compose.yaml` 是已有 Postgres/API/worker 模板，本轮未运行容器验收；Postgres在P1收尾时已通过独立实例回归。Ollama 回环连接目前按宿主进程部署，容器不能把其自身的 `127.0.0.1` 当作宿主 Mac。
 
 ## 工程与资料
 
 ```text
-server/fairy/        领域服务、来源记忆、模型路由、私有配置、API、worker
-apps/web/            真实 API 管理台、记忆审阅、模型配置和 SSE 对话更新
-apps/ios/            Swift 传输起点，尚非完整 App
-apps/mac-bridge/     执行桥契约，尚无执行器
+server/fairy/        领域服务、记忆/学习、模型、技能、Mac 桥、自主预算、进化实验、API、worker
+apps/web/            管理端、iPhone PWA、记忆/学习/技能/Mac/自主页面和 SSE
+apps/ios/FairyApp/   macOS/iOS SwiftUI Package、Keychain、真实 API 页面
+apps/mac-bridge/     只读 Mac 桥与受限应用启动边界
 contracts/           从代码生成的实际 OpenAPI
 scripts/             契约导出、隔离的真实模型/浏览器验收
 tests/              自动回归

@@ -5,6 +5,13 @@ import {
     renderKnowledge
 } from './knowledge.js';
 import {
+    renderMac,
+    renderSkills
+} from './p3.js';
+import {
+    renderAutonomy
+} from './p5.js';
+import {
     renderModels,
     renderMemories,
     renderConversation,
@@ -24,7 +31,7 @@ const names = {
     models: '模型与路由',
     learning: '学习中心',
     assessments: '学习测验',
-    evolution: '进化实验',
+    evolution: '自主与进化',
     skills: '技能中心',
     mac: 'Mac 操作',
     flows: '流程管理',
@@ -140,6 +147,18 @@ async function render() {
     }
     if (route === 'chat') {
         conversation = await renderConversation(ui);
+        return
+    }
+    if (route === 'skills') {
+        await renderSkills(ui);
+        return
+    }
+    if (route === 'mac') {
+        await renderMac(ui);
+        return
+    }
+    if (route === 'evolution') {
+        await renderAutonomy(ui);
         return
     }
     if (route === 'overview') {
@@ -293,8 +312,7 @@ async function render() {
                 location.hash = 'skills'
             }))
         }
-    } else if (route === 'skills') records(panel('习得知识 · 无执行权限'), await api('skills'));
-    else if (route === 'cards') {
+    } else if (route === 'cards') {
         const p = panel('自建卡片');
         const title = el('input');
         title.placeholder = '标题';
@@ -378,38 +396,14 @@ async function render() {
                 mac_execute: false,
                 autonomous_paid: false,
                 mac_allowed_apps: conf.mac_allowed_apps || [],
-                mac_allowed_paths: conf.mac_allowed_paths || []
+                mac_allowed_paths: conf.mac_allowed_paths || [],
+                autonomy_enabled: Boolean(conf.autonomy_enabled),
+                autonomy_daily_minutes: conf.autonomy_daily_minutes ?? 30,
+                autonomy_daily_items: conf.autonomy_daily_items ?? 10
             });
             await render()
         }));
         p.append(el('p', 'Mac 桌宠宿主尚未接入。此配置不会触发采集或操作。', 'muted'))
-    } else if (route === 'mac') {
-        const conf = (await api('config'))[0] || {
-            revision: 0,
-            daily_minutes: 45,
-            pet_enabled: false
-        };
-        const p = panel('Mac 权限预配置');
-        p.append(el('p', '执行桥尚未实现，执行开关保持关闭。可先保存未来允许的应用与目录，保存不会请求系统权限或操作文件。'));
-        const apps = el('textarea');
-        apps.value = (conf.mac_allowed_apps || []).join('\n');
-        apps.placeholder = '应用 Bundle ID，每行一个';
-        const paths = el('textarea');
-        paths.value = (conf.mac_allowed_paths || []).join('\n');
-        paths.placeholder = '允许目录绝对路径，每行一个';
-        const lines = x => x.value.split('\n').map(v => v.trim()).filter(Boolean);
-        p.append(el('label', '允许的应用'), apps, el('label', '允许的目录'), paths, button('保存预配置', async () => {
-            await api('config', 'PUT', {
-                revision: conf.revision,
-                daily_minutes: conf.daily_minutes,
-                pet_enabled: conf.pet_enabled,
-                mac_execute: false,
-                autonomous_paid: false,
-                mac_allowed_apps: lines(apps),
-                mac_allowed_paths: lines(paths)
-            });
-            await render()
-        }))
     } else if (route === 'flows') {
         const p = panel('真实事件轨迹');
         records(p, await api('events'));
@@ -454,6 +448,7 @@ $('login').onsubmit = e => {
     run(async () => {
         await api('capabilities');
         $('status').textContent = '已连接本机服务';
+        document.body.classList.add('connected');
         if (stopEvents) stopEvents();
         stopEvents = watchEvents(() => token, event => {
             if (conversation) {
@@ -474,3 +469,9 @@ $('login').onsubmit = e => {
 run(render);
 
 window.addEventListener('beforeunload', () => stopEvents?.());
+
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || ['127.0.0.1', 'localhost'].includes(location.hostname))) {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {
+        // The management console remains usable when a browser disables PWA workers.
+    });
+}

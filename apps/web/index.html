@@ -1,1 +1,48 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fairy Core</title><link rel="stylesheet" href="/assets/style.css"><body><aside><h1>Fairy</h1><p>认知与自主能力工作台</p><nav id="nav"></nav><p class="hint">开发版 0.2<br>状态以真实 API 为准</p></aside><main><header><div><h1 id="title">运行概览</h1><p id="status">未连接</p></div><form id="login"><input id="token" type="password" placeholder="本地服务令牌" autocomplete="off" aria-label="服务令牌"><button>连接</button></form></header><section id="content"></section><p id="error" role="alert"></p></main><script type="module" src="/assets/app.js"></script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#edf2f5">
+  <meta name="color-scheme" content="light dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Fairy">
+  <link rel="manifest" href="/assets/manifest.webmanifest">
+  <link rel="icon" href="/assets/fairy-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="/assets/style.css">
+  <title>Fairy</title>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="window-chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+    <h1>Fairy</h1>
+    <p>认知与自主能力工作台</p>
+    <nav id="nav" aria-label="Fairy 管理导航"></nav>
+    <p class="hint">开发版 0.3<br>状态以真实 API 为准</p>
+  </aside>
+  <main>
+    <header>
+      <div>
+        <h1 id="title">运行概览</h1>
+        <p id="status">未连接</p>
+      </div>
+      <form id="login">
+        <input id="token" type="password" placeholder="本地服务令牌" autocomplete="off" aria-label="服务令牌">
+        <button>连接</button>
+      </form>
+    </header>
+    <section id="content" aria-live="polite"></section>
+    <p id="error" role="alert"></p>
+  </main>
+  <nav id="mobileTabs" class="mobile-tabs" aria-label="iPhone 导航">
+    <a href="#overview"><span>◉</span>运行</a>
+    <a href="#chat"><span>◌</span>对话</a>
+    <a href="#memories"><span>✦</span>记忆</a>
+    <a href="#learning"><span>▤</span>学习</a>
+    <a href="#evolution"><span>⌁</span>自主</a>
+  </nav>
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>

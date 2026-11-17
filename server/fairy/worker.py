@@ -7,6 +7,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from .store import Store, now
 from .service import Service
+from .autonomy import AutonomyService
 
 
 def tick(db):
@@ -89,8 +90,10 @@ def main():
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
     db = Store(os.getenv("FAIRY_DATABASE_URL", "sqlite:///var/fairy.db"))
+    autonomy = AutonomyService(db)
     while True:
         tick(db)
+        autonomy.refresh()
         if args.once:
             break
         time.sleep(2)

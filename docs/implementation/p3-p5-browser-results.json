@@ -1,0 +1,19 @@
+{
+  "status": "passed",
+  "checks": [
+    "macOS-style management shell",
+    "read-only Mac status",
+    "allowlisted launch scope configured without launching",
+    "skill install/grant/invoke/disable",
+    "autonomy candidate generation and budget acceptance",
+    "isolated evolution evaluation and review state",
+    "PWA manifest and service worker",
+    "browser voice input and read-aloud controls",
+    "iPhone bottom tabs at 390px",
+    "no horizontal overflow",
+    "no browser runtime errors"
+  ],
+  "synthetic_data": true,
+  "actual_app_launched": false,
+  "runtime_evolution_applied": false
+}

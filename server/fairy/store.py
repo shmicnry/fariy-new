@@ -65,15 +65,16 @@ class ScopeLock(Base):
 
 
 def view(r):
-    return dict(
-        id=r.id,
-        scope=r.scope,
-        kind=r.kind,
-        revision=r.revision,
-        status=r.status,
-        created_at=r.created_at,
-        **json.loads(r.payload),
-    )
+    result = {
+        "id": r.id,
+        "scope": r.scope,
+        "kind": r.kind,
+        "revision": r.revision,
+        "status": r.status,
+        "created_at": r.created_at,
+    }
+    result.update(json.loads(r.payload))
+    return result
 
 
 class Store:

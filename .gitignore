@@ -10,6 +10,7 @@ var/
 *.sqlite*
 .DS_Store
 build/
+**/.build/
 *.egg-info/
 
 *.migrate.lock
