@@ -28,11 +28,21 @@
         <h1 id="title">运行概览</h1>
         <p id="status">未连接</p>
       </div>
-      <form id="login">
-        <input id="token" type="password" placeholder="本地服务令牌" autocomplete="off" aria-label="服务令牌">
-        <button>连接</button>
-      </form>
+      <div class="header-actions">
+        <button id="notificationButton" class="icon-button notification-button" type="button" aria-label="打开通知中心" title="通知中心">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 10a5.5 5.5 0 0 1 11 0v4l1.5 2.5h-14L6.5 14zM10 19h4"/></svg>
+          <span id="notificationBadge" class="notification-badge" hidden>0</span>
+        </button>
+        <form id="login">
+          <input id="token" type="password" placeholder="本地服务令牌" autocomplete="off" aria-label="服务令牌">
+          <button>连接</button>
+        </form>
+      </div>
     </header>
+    <section id="syncNotice" class="sync-notice" hidden role="status">
+      <span id="syncNoticeText">当前页面有新的后台更新。</span>
+      <button id="syncRefresh" class="button button-secondary" type="button">刷新页面</button>
+    </section>
     <section id="content" aria-live="polite"></section>
     <p id="error" role="alert"></p>
   </main>

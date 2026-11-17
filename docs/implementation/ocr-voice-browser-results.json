@@ -1,0 +1,15 @@
+{
+  "status": "passed",
+  "checks": [
+    "macOS Vision OCR image upload",
+    "bounded OCR line extraction",
+    "worker processing of OCR source",
+    "local TTS status",
+    "local WAV synthesis",
+    "no browser runtime errors"
+  ],
+  "local_asr_configured": false,
+  "audio_persisted": false,
+  "cloud_used": false,
+  "synthetic_data": true
+}

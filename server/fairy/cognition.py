@@ -1,5 +1,6 @@
 """Pure, replayable policies. These functions never grant execution permissions."""
 
+import hashlib
 import math
 import re
 
@@ -17,7 +18,37 @@ def tokens(text):
 
 def relevance(query, text):
     q, t = tokens(query), tokens(text)
-    return len(q & t) / max(1, len(q))
+    lexical = len(q & t) / max(1, len(q))
+    query_chars = set("".join(re.findall(r"[\w\u4e00-\u9fff]", query.casefold())))
+    text_chars = set("".join(re.findall(r"[\w\u4e00-\u9fff]", text.casefold())))
+    character_overlap = (
+        2 * len(query_chars & text_chars)
+        / max(1, len(query_chars) + len(text_chars))
+    )
+    vector = character_cosine(query, text)
+    return round(
+        min(1.0, max(lexical, character_overlap) * 0.68 + vector * 0.32),
+        6,
+    )
+
+
+def character_vector(value, dimensions=256):
+    normalized = "".join(re.findall(r"[\w\u4e00-\u9fff]+", value.casefold()))
+    vector = [0.0] * dimensions
+    for width in (1, 2, 3):
+        for index in range(max(0, len(normalized) - width + 1)):
+            shingle = normalized[index : index + width]
+            digest = hashlib.blake2b(shingle.encode("utf-8"), digest_size=8).digest()
+            number = int.from_bytes(digest, "big")
+            bucket = number % dimensions
+            vector[bucket] += 1.0 if number & 1 else -1.0
+    magnitude = math.sqrt(sum(item * item for item in vector))
+    return vector if magnitude == 0 else [item / magnitude for item in vector]
+
+
+def character_cosine(left, right):
+    a, b = character_vector(left), character_vector(right)
+    return max(0.0, sum(x * y for x, y in zip(a, b)))
 
 
 def rrf(*channels):

@@ -28,8 +28,18 @@ class LearningService(Service):
     def ingest(self, filename, encoded, key):
         if "/" in filename or "\\" in filename or not filename.strip():
             fail(422, "filename_must_be_basename")
-        if PurePath(filename).suffix.lower() not in (".txt", ".md", ".pdf", ".docx"):
-            fail(415, "supported_files_txt_md_pdf_docx_only")
+        if PurePath(filename).suffix.lower() not in (
+            ".txt",
+            ".md",
+            ".pdf",
+            ".docx",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".heic",
+            ".tiff",
+        ):
+            fail(415, "supported_document_or_image_files_only")
         if len(encoded) > 1_400_000:
             fail(413, "file_too_large")
         try:

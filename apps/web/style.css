@@ -501,6 +501,12 @@ body.connected.offline #status::before {
     gap: 7px;
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 #login input {
     width: 220px;
     min-width: 0;
@@ -508,6 +514,76 @@ body.connected.offline #status::before {
 
 body.connected #login {
     display: none;
+}
+
+body:not(.connected) .notification-button {
+    display: none;
+}
+
+.notification-button {
+    position: relative;
+    flex: 0 0 auto;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+}
+
+.notification-button svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+}
+
+.notification-badge {
+    position: absolute;
+    top: -4px;
+    right: 0;
+    display: grid;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    place-items: center;
+    border: 2px solid var(--canvas);
+    border-radius: 9px;
+    background: #c24646;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.notification-badge[hidden] {
+    display: none;
+}
+
+.sync-notice {
+    display: flex;
+    max-width: 1180px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin: -6px 0 14px;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    animation: content-enter 180ms ease both;
+}
+
+.sync-notice[hidden] {
+    display: none;
+}
+
+.sync-notice button {
+    flex: 0 0 auto;
+    min-height: 30px;
 }
 
 #content,
@@ -929,6 +1005,57 @@ blockquote p:last-child,
     overflow: auto;
 }
 
+.notification-center {
+    display: grid;
+    gap: 8px;
+}
+
+.notification-center > .button-row {
+    margin-bottom: 4px;
+}
+
+.notification-row {
+    display: grid;
+    width: 100%;
+    min-height: 64px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+    padding: 11px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface-muted);
+    color: var(--ink);
+    text-align: left;
+}
+
+.notification-row:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--ink);
+}
+
+.notification-row strong {
+    font-size: 13px;
+}
+
+.notification-row small {
+    grid-column: 1;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.notification-row .tag {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+}
+
+.tag-unread {
+    background: var(--accent);
+    color: #fff;
+}
+
 .icon-button {
     display: grid;
     width: 30px;
@@ -1037,6 +1164,22 @@ blockquote p:last-child,
 
     #status {
         font-size: 13px;
+    }
+
+    .header-actions {
+        gap: 5px;
+    }
+
+    .notification-button {
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        min-height: 44px;
+    }
+
+    .sync-notice {
+        margin: -2px 0 12px;
+        padding: 10px 11px;
     }
 
     #content,

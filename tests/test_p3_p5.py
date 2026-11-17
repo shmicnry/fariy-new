@@ -2,13 +2,21 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
+import asyncio
 import json
+import os
+import plistlib
+import subprocess
+import sys
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from fairy.app import create_app
-from fairy.worker import tick
+from fairy.cognition import character_cosine, relevance
+from fairy.semantic import cosine
+from fairy.worker import WorkerLock, tick, write_status
 
 
 @pytest.fixture
@@ -22,7 +30,7 @@ def env(tmp_path):
 def test_builtin_skill_install_grant_invoke_and_disable(env):
     app, client = env
     registry = client.get("/v2/skills/registry").json()
-    assert len(registry) == 5
+    assert len(registry) == 6
     status_skill = next(
         item for item in registry if item["implementation"] == "mac_status"
     )
@@ -158,6 +166,28 @@ def test_mac_open_app_requires_all_scopes_and_has_no_arbitrary_arguments(env):
     assert result.json()["result"]["verification"].endswith("not_verified")
 
 
+def test_mac_ax_tree_requires_helper_and_tcc(env):
+    app, client = env
+    registry = client.get("/v2/skills/registry").json()
+    skill = next(item for item in registry if item["implementation"] == "mac_ax_tree")
+    installed = client.post("/v2/skills/registry/" + skill["id"] + "/install").json()
+    granted = client.post(
+        "/v2/skills/registry/" + skill["id"] + "/grant",
+        json={
+            "revision": installed["revision"],
+            "permissions": ["mac.read_ax"],
+            "expires_minutes": 5,
+        },
+    )
+    assert granted.status_code == 200
+    result = client.post(
+        "/v2/skills/registry/" + skill["id"] + "/invoke",
+        json={"query": "com.apple.TextEdit"},
+    )
+    helper = client.get("/v2/mac/status").json().get("helper_version")
+    assert result.status_code == (403 if helper else 503)
+
+
 def test_autonomy_candidates_require_budget_and_create_goal(env):
     app, client = env
     material = app.state.service.material("课程", "植物需要水分。", "material")
@@ -256,6 +286,95 @@ def test_single_refresh_deduplicates_world_conflicts(env):
     ]
     assert len(conflicts) == 1
     assert client.post("/v2/autonomy/refresh").json() == []
+
+
+def test_local_character_vector_retrieval_handles_reordered_cjk():
+    assert relevance("水温", "我喜欢喝温水") >= 0.25
+    assert relevance("咖啡", "我喜欢喝温水") == 0
+    assert character_cosine("温水", "温水") > 0.99
+    assert character_cosine("咖啡", "水量") < 0.2
+
+
+def test_semantic_embeddings_are_local_and_cached(tmp_path, monkeypatch):
+    calls = []
+
+    def handler(request):
+        payload = json.loads(request.content)
+        calls.append(payload)
+        vectors = []
+        for text in payload["input"]:
+            vectors.append([1.0, 0.0] if "水" in text else [0.0, 1.0])
+        return httpx.Response(200, json={"embeddings": vectors})
+
+    monkeypatch.setenv("FAIRY_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("FAIRY_OLLAMA_MODEL", "")
+    monkeypatch.setenv("FAIRY_EMBEDDING_MODEL", "test-embedding")
+    app = create_app(
+        "sqlite:///" + str(tmp_path / "semantic.db"),
+        token="owner",
+        transport=httpx.MockTransport(handler),
+    )
+    first = asyncio.run(app.state.semantic.embeddings(["水温", "咖啡"]))
+    second = asyncio.run(app.state.semantic.embeddings(["水温", "咖啡"]))
+    assert first == second == [[1.0, 0.0], [0.0, 1.0]]
+    assert len(calls) == 1
+    assert cosine(first[0], first[1]) == 0
+
+
+def test_worker_status_endpoint_and_stale_lock_recovery(env, tmp_path):
+    app, client = env
+    state = tmp_path / "worker-state"
+    state.mkdir()
+    write_status(
+        state,
+        {
+            "pid": os.getpid(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "heartbeat_at": datetime.now(timezone.utc).isoformat(),
+            "cycle": 3,
+            "status": "running",
+            "error": None,
+        },
+    )
+    app.state.worker_state_dir = str(state)
+    status = client.get("/v2/worker/status")
+    assert status.status_code == 200
+    assert status.json()["alive"] is True
+    assert status.json()["cycle"] == 3
+
+    (state / "worker.pid").write_text("99999999", encoding="utf-8")
+    with WorkerLock(state) as lock:
+        assert lock.acquired is True
+        assert (state / "worker.pid").read_text(encoding="utf-8") == str(os.getpid())
+    assert not (state / "worker.pid").exists()
+
+
+def test_macos_worker_service_dry_run_generates_valid_plist(tmp_path):
+    script = Path(__file__).resolve().parents[1] / "scripts" / "fairy_worker_service.sh"
+    plist = tmp_path / "io.fairy.worker.plist"
+    env = {
+        **os.environ,
+        "FAIRY_LAUNCHD_DRY_RUN": "1",
+        "FAIRY_LAUNCHD_PLIST": str(plist),
+        "FAIRY_PYTHON": sys.executable,
+        "FAIRY_WORKER_RUNTIME": str(tmp_path / "runtime"),
+        "FAIRY_STATE_DIR": str(tmp_path / "state"),
+        "FAIRY_LOG_DIR": str(tmp_path / "logs"),
+    }
+    result = subprocess.run(
+        ["sh", str(script), "install"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    payload = plistlib.loads(plist.read_bytes())
+    assert payload["Label"] == "io.fairy.worker"
+    assert payload["RunAtLoad"] is True
+    installed_python = str(tmp_path / "runtime" / ".venv" / "bin" / "python")
+    assert payload["ProgramArguments"][:3] == [installed_python, "-m", "fairy.worker"]
+    assert payload["EnvironmentVariables"]["FAIRY_STATE_DIR"] == str(tmp_path / "state")
 
 
 def test_expired_skill_grant_cannot_invoke(env):
@@ -387,7 +506,34 @@ def test_pwa_shell_is_served_and_does_not_cache_api(env):
     assert worker.status_code == 200
     assert worker.headers["service-worker-allowed"] == "/"
     assert "url.pathname.startsWith('/v2/')" in worker.text
-    assert "fairy-shell-v7" in worker.text
+    assert "fairy-shell-v8" in worker.text
+
+
+def test_local_voice_status_and_tts(env, monkeypatch):
+    app, client = env
+    monkeypatch.delenv("FAIRY_WHISPER_CLI", raising=False)
+    monkeypatch.delenv("FAIRY_WHISPER_MODEL", raising=False)
+    status = client.get("/v2/voice/status")
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["audio_persisted"] is False
+    assert payload["cloud_used"] is False
+    if payload["local_tts"]:
+        result = client.post("/v2/voice/speak", json={"text": "Fairy 本地语音测试"})
+        assert result.status_code == 200
+        assert result.headers["content-type"].startswith("audio/wav")
+        assert result.content.startswith(b"RIFF")
+    if not payload["local_asr"]:
+        missing = client.post(
+            "/v2/voice/transcribe",
+            json={
+                "audio_base64": "UklGRg==",
+                "media_type": "audio/wav",
+                "language": "zh",
+            },
+        )
+        assert missing.status_code == 503
+        assert missing.json()["detail"] == "local_asr_not_configured"
 
 
 def test_lan_hosts_require_explicit_allowlist(env, monkeypatch):

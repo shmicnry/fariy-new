@@ -165,6 +165,44 @@
         }
       }
     },
+    "/semantic/status": {
+      "get": {
+        "summary": "Semantic Status",
+        "operationId": "semantic_status_semantic_status_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/models/invocations": {
       "get": {
         "summary": "Invocations",
@@ -2473,6 +2511,178 @@
         }
       }
     },
+    "/worker/status": {
+      "get": {
+        "summary": "Worker Status",
+        "operationId": "worker_status_worker_status_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/voice/status": {
+      "get": {
+        "summary": "Voice Status",
+        "operationId": "voice_status_voice_status_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/voice/speak": {
+      "post": {
+        "summary": "Voice Speak",
+        "operationId": "voice_speak_voice_speak_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeechInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/voice/transcribe": {
+      "post": {
+        "summary": "Voice Transcribe",
+        "operationId": "voice_transcribe_voice_transcribe_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranscriptionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/mac/status": {
       "get": {
         "summary": "Mac Status",
@@ -3337,6 +3547,44 @@
               "title": "Limit"
             }
           },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/head": {
+      "get": {
+        "summary": "Events Head",
+        "operationId": "events_head_events_head_get",
+        "parameters": [
           {
             "name": "authorization",
             "in": "header",
@@ -4334,6 +4582,7 @@
               "type": "string",
               "enum": [
                 "mac.read_status",
+                "mac.read_ax",
                 "mac.open_app",
                 "learning.read",
                 "world.read",
@@ -4430,6 +4679,50 @@
           "reason"
         ],
         "title": "SourceReview"
+      },
+      "SpeechInput": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "SpeechInput"
+      },
+      "TranscriptionInput": {
+        "properties": {
+          "audio_base64": {
+            "type": "string",
+            "maxLength": 14000000,
+            "minLength": 1,
+            "title": "Audio Base64"
+          },
+          "media_type": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Media Type",
+            "default": "audio/webm"
+          },
+          "language": {
+            "type": "string",
+            "pattern": "^[a-zA-Z-]{2,12}$",
+            "title": "Language",
+            "default": "zh"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "audio_base64"
+        ],
+        "title": "TranscriptionInput"
       },
       "TurnInput": {
         "properties": {

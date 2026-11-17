@@ -147,7 +147,7 @@ class Service:
                 ],
                 "reason": "matched" if ranked else "no_match_not_proof_of_absence",
                 "degraded": True,
-                "retrieval_mode": "lexical_only",
+                "retrieval_mode": "local_character_vector_hybrid",
             }
 
     def model_context(self, query):

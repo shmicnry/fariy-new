@@ -12,10 +12,13 @@ services:
       retries: 10
   api:
     build: .
+    restart: unless-stopped
     ports: ["127.0.0.1:8000:8000"]
     environment:
       FAIRY_TOKEN: ${FAIRY_TOKEN:?set FAIRY_TOKEN}
       FAIRY_DATABASE_URL: postgresql+psycopg://fairy:${FAIRY_DB_PASSWORD}@db/fairy
+      FAIRY_STATE_DIR: /app/var
+    volumes: [fairy_state:/app/var]
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
       interval: 5s
@@ -24,10 +27,19 @@ services:
       db: {condition: service_healthy}
   worker:
     build: .
+    restart: unless-stopped
     command: [python, -m, fairy.worker]
     environment:
       FAIRY_DATABASE_URL: postgresql+psycopg://fairy:${FAIRY_DB_PASSWORD}@db/fairy
+      FAIRY_STATE_DIR: /app/var
+    volumes: [fairy_state:/app/var]
+    healthcheck:
+      test: [CMD, python, -m, fairy.worker, --status, --state-dir, /app/var]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     depends_on:
       api: {condition: service_healthy}
 volumes:
   postgres_data:
+  fairy_state:

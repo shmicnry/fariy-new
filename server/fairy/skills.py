@@ -15,6 +15,7 @@ from .store import view
 
 Permission = Literal[
     "mac.read_status",
+    "mac.read_ax",
     "mac.open_app",
     "learning.read",
     "world.read",
@@ -22,6 +23,7 @@ Permission = Literal[
 ]
 Implementation = Literal[
     "mac_status",
+    "mac_ax_tree",
     "mac_open_app",
     "learning_search",
     "world_query",
@@ -67,6 +69,14 @@ BUILTINS = (
         "purpose": "读取系统版本、权限占位状态与应用目录清单，不执行输入注入或屏幕采集。",
         "implementation": "mac_status",
         "permissions": ["mac.read_status"],
+    },
+    {
+        "key": "system.mac_ax_tree",
+        "name": "Mac 只读界面结构",
+        "version": "1.0.0",
+        "purpose": "在所有者授权辅助功能后，读取指定运行中应用的限深 Accessibility Tree，不执行点击或键入。",
+        "implementation": "mac_ax_tree",
+        "permissions": ["mac.read_ax"],
     },
     {
         "key": "learning.search",
@@ -225,12 +235,14 @@ class SkillService(Service):
         try:
             if data["implementation"] == "mac_status":
                 result = MacBridge(self).status()
+            elif data["implementation"] == "mac_ax_tree":
+                result = MacBridge(self).ax_tree(body.query.strip() or None)
             elif data["implementation"] == "mac_open_app":
                 result = MacBridge(self).open_app(body.query.strip())
             elif data["implementation"] == "learning_search":
                 from .cognition import relevance
 
-                results = []
+                candidates = []
                 with self.db.sessions() as session:
                     for chunk in self.rows(session, "learning_chunk"):
                         if chunk.status != "active":
@@ -242,20 +254,66 @@ class SkillService(Service):
                         ):
                             continue
                         score = relevance(body.query, chunk_data["text"])
-                        if score > 0:
-                            results.append(
-                                {
-                                    "id": chunk.id,
-                                    "text": chunk_data["text"],
-                                    "locations": chunk_data.get("locations", []),
-                                    "relevance": score,
-                                }
+                        candidates.append(
+                            {
+                                "id": chunk.id,
+                                "text": chunk_data["text"],
+                                "locations": chunk_data.get("locations", []),
+                                "lexical_relevance": score,
+                            }
+                        )
+                semantic = getattr(self, "semantic", None)
+                results = None
+                if semantic is not None and candidates:
+                    reranked = await semantic.rerank(
+                        body.query,
+                        [
+                            {"id": item["id"], "text": item["text"]}
+                            for item in candidates[:200]
+                        ],
+                    )
+                    if reranked is not None:
+                        scores = {
+                            item["id"]: item["semantic_relevance"]
+                            for item in reranked
+                        }
+                        results = []
+                        for item in candidates:
+                            if item["id"] not in scores:
+                                continue
+                            item["semantic_relevance"] = scores[item["id"]]
+                            item["relevance"] = round(
+                                item["lexical_relevance"] * 0.55
+                                + max(0.0, scores[item["id"]] - 0.35) * 0.45,
+                                6,
                             )
-                result = {
-                    "results": sorted(
-                        results, key=lambda item: (-item["relevance"], item["id"])
-                    )[:20]
-                }
+                            if (
+                                item["lexical_relevance"] > 0
+                                or item["semantic_relevance"] >= 0.68
+                            ):
+                                results.append(item)
+                        result = {
+                            "results": sorted(
+                                results,
+                                key=lambda item: (-item["relevance"], item["id"]),
+                            )[:20],
+                            "semantic_available": True,
+                            "retrieval_mode": "ollama_semantic_rerank",
+                        }
+                if results is None:
+                    results = [
+                        dict(item, relevance=item["lexical_relevance"])
+                        for item in candidates
+                        if item["lexical_relevance"] > 0
+                    ]
+                    result = {
+                        "results": sorted(
+                            results,
+                            key=lambda item: (-item["relevance"], item["id"]),
+                        )[:20],
+                        "semantic_available": False,
+                        "retrieval_mode": "local_character_vector_hybrid",
+                    }
             elif data["implementation"] == "world_query":
                 from .knowledge import KnowledgeService
 

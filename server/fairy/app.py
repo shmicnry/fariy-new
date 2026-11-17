@@ -23,6 +23,9 @@ from .mac_bridge import MacBridge
 from .skills import SkillGrantInput, SkillInvokeInput, SkillService
 from .autonomy import AutonomyService
 from .evolution import EvolutionService, ExperimentInput
+from .worker import read_status
+from .voice import SpeechInput, TranscriptionInput, VoiceService
+from .semantic import SemanticService
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -145,10 +148,13 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     service = MemoryService(db)
     model_settings = ModelSettings(db, secrets_dir=secrets_dir)
     router = ModelRouter(service, model_settings, transport=transport)
+    semantic = SemanticService(db, model_settings, transport=transport)
     skill_service = SkillService(db)
+    skill_service.semantic = semantic
     mac_bridge = MacBridge(service)
     autonomy = AutonomyService(db)
     evolution = EvolutionService(db)
+    voice = VoiceService()
     app = FastAPI(title="Fairy Core", version="0.3.0")
     app.state.db = db
     app.state.service = service
@@ -158,6 +164,9 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     app.state.mac_bridge = mac_bridge
     app.state.autonomy = autonomy
     app.state.evolution = evolution
+    app.state.voice = voice
+    app.state.semantic = semantic
+    app.state.worker_state_dir = os.getenv("FAIRY_STATE_DIR", "var")
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -242,21 +251,40 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "reviewed_memory": True,
             "memory_corrections": True,
             "text_materials": True,
-            "document_formats": [".txt", ".md", ".pdf", ".docx"],
+            "document_formats": [
+                ".txt",
+                ".md",
+                ".pdf",
+                ".docx",
+                ".png",
+                ".jpg",
+                ".jpeg",
+                ".heic",
+                ".tiff",
+            ],
             "source_review": True,
             "world_claims": True,
             "fixed_choice_assessments": True,
             "skills_registry": True,
             "mac_read_only": True,
+            "mac_ax_tree_read_only": True,
             "autonomy_queue": True,
             "evolution_lab": True,
+            "worker_status_endpoint": True,
+            "cross_page_event_sync": True,
+            "local_notification_center": True,
+            "local_tts": voice.status()["local_tts"],
+            "local_asr": voice.status()["local_asr"],
+            "semantic_model_embeddings": semantic.configuration()["enabled"],
             "mac_execute": bool(config.get("mac_execute")),
             "mac_execute_scope": (
                 "allowlisted_app_launch" if config.get("mac_execute") else "disabled"
             ),
             "video": False,
             "automatic_mastery": False,
-            "vector_search": False,
+            "vector_search": True,
+            "vector_search_mode": "local_character_vector_hybrid",
+            "semantic_model": semantic.configuration()["model"],
             "wardrobe_rendering": False,
         }
 
@@ -271,6 +299,10 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     @api.get("/models/ollama")
     async def local_models():
         return await router.installed()
+
+    @api.get("/semantic/status")
+    def semantic_status():
+        return semantic.configuration()
 
     @api.get("/models/invocations")
     def invocations(limit: int = Query(default=100, ge=1, le=1000)):
@@ -488,10 +520,10 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
         return [r for r in service.list("practice") if r["course_id"] == id]
 
     @api.get("/learning/search")
-    def search_learning(q: str = Query(min_length=1, max_length=1000)):
+    async def search_learning(q: str = Query(min_length=1, max_length=1000)):
         from .cognition import relevance
 
-        results = []
+        candidates = []
         with db.sessions() as s:
             for row in service.rows(s, "learning_chunk"):
                 if row.status != "active":
@@ -503,11 +535,46 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
                 ):
                     continue
                 score = relevance(q, d["text"])
-                if score > 0:
-                    results.append(dict(view(row), relevance=score))
+                candidates.append(dict(view(row), lexical_relevance=score))
+        reranked = await semantic.rerank(
+            q,
+            [
+                {"id": item["id"], "text": item["text"]}
+                for item in candidates[:200]
+            ],
+        )
+        if reranked is None:
+            results = [
+                dict(item, relevance=item["lexical_relevance"])
+                for item in candidates
+                if item["lexical_relevance"] > 0
+            ]
+            return {
+                "results": sorted(
+                    results, key=lambda r: (-r["relevance"], r["id"])
+                )[:20],
+                "retrieval_mode": "local_character_vector_hybrid_chunks",
+                "semantic_available": False,
+            }
+        semantic_by_id = {
+            item["id"]: item["semantic_relevance"] for item in reranked
+        }
+        results = []
+        for item in candidates:
+            if item["id"] not in semantic_by_id:
+                continue
+            item["semantic_relevance"] = semantic_by_id[item["id"]]
+            item["relevance"] = round(
+                item["lexical_relevance"] * 0.55
+                + max(0.0, item["semantic_relevance"] - 0.35) * 0.45,
+                6,
+            )
+            if item["lexical_relevance"] > 0 or item["semantic_relevance"] >= 0.68:
+                results.append(item)
         return {
             "results": sorted(results, key=lambda r: (-r["relevance"], r["id"]))[:20],
-            "retrieval_mode": "lexical_chunks",
+            "retrieval_mode": "ollama_semantic_rerank_with_local_character_fallback",
+            "semantic_available": True,
         }
 
     @api.get("/learning/courses/{id}/effect")
@@ -638,6 +705,31 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     def jobs():
         return service.list("job")
 
+    @api.get("/worker/status")
+    def worker_status():
+        return read_status(app.state.worker_state_dir) or {
+            "status": "missing",
+            "alive": False,
+        }
+
+    @api.get("/voice/status")
+    def voice_status():
+        return voice.status()
+
+    @api.post("/voice/speak")
+    def voice_speak(body: SpeechInput):
+        from fastapi import Response
+
+        return Response(
+            content=voice.speak(body.text),
+            media_type="audio/wav",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @api.post("/voice/transcribe")
+    def voice_transcribe(body: TranscriptionInput):
+        return voice.transcribe(body)
+
     @api.get("/mac/status")
     def mac_status():
         return mac_bridge.status()
@@ -738,6 +830,17 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
                     .limit(limit)
                 )
             ]
+
+    @api.get("/events/head")
+    def events_head():
+        with db.sessions() as s:
+            value = s.scalar(
+                select(Event.seq)
+                .where(Event.scope == "owner")
+                .order_by(Event.seq.desc())
+                .limit(1)
+            )
+        return {"seq": value or 0}
 
     @api.get("/stream")
     async def stream(

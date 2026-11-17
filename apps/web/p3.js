@@ -45,18 +45,25 @@ export async function renderSkills(ui) {
             const input = el('input');
             input.placeholder = skill.implementation === 'learning_search'
                 ? '输入检索词'
+                : skill.implementation === 'mac_ax_tree'
+                    ? '应用 Bundle ID；留空读取前台应用'
                 : skill.implementation === 'mac_open_app'
                     ? '输入允许列表中的准确应用名称'
                     : '此技能无需输入';
             input.setAttribute('aria-label', '技能调用参数');
             const output = el('pre', '', 'skill-output');
-            const needsInput = ['learning_search', 'mac_open_app'].includes(skill.implementation);
+            const needsInput = ['learning_search', 'mac_open_app', 'mac_ax_tree'].includes(skill.implementation);
             row.append(
                 el('p', '已启用，授权到期后自动失效。', 'muted')
             );
             if (needsInput) {
+                const inputLabel = skill.implementation === 'mac_ax_tree'
+                    ? '应用 Bundle ID（可留空读取前台应用）'
+                    : skill.implementation === 'mac_open_app'
+                        ? '允许应用'
+                        : '检索关键词';
                 controlLabel(
-                    skill.implementation === 'mac_open_app' ? '允许应用' : '检索关键词',
+                    inputLabel,
                     input,
                     row
                 );
@@ -83,13 +90,17 @@ export async function renderSkills(ui) {
 export async function renderMac(ui) {
     const {el, api, panel, button, controlLabel} = ui;
     const status = await api('mac/status');
+    const permission = value => value === true ? '已授权' : value === false ? '未授权' : '尚未探测';
     const statusPanel = panel('这台 Mac · 只读状态');
     statusPanel.append(
         el('h3', status.platform + ' ' + (status.macos_version || '')),
         el('p', '当前模式：' + status.executor_mode, status.executor_mode === 'observe_only' ? 'route-note' : ''),
-        el('p', '辅助功能：' + status.accessibility_permission + ' · 屏幕录制：' + status.screen_recording_permission, 'muted'),
+        el('p', '辅助功能：' + permission(status.accessibility_permission) + ' · 屏幕录制：' + permission(status.screen_recording_permission), 'muted'),
         el('p', status.arbitrary_shell || status.input_injection || status.screen_capture ? '高风险执行面已开启' : '任意 shell、输入注入和屏幕采集均未启用', 'route-note')
     );
+    if (status.helper_version) {
+        statusPanel.append(el('p', '只读权限 helper ' + status.helper_version + ' 已连接', 'muted'));
+    }
     const apps = await api('mac/apps');
     const appPanel = panel('应用目录');
     appPanel.append(el('p', '只读取应用名称和路径；不会启动应用。', 'muted'));

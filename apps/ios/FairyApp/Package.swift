@@ -8,7 +8,11 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "FairyApp",
-            linkerSettings: [.linkedFramework("Security")]
+            linkerSettings: [
+                .linkedFramework("Security"),
+                .linkedFramework("UserNotifications"),
+                .linkedFramework("AVFoundation"),
+            ]
         )
     ]
 )

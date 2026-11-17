@@ -1,0 +1,16 @@
+{
+  "status": "passed",
+  "provider": "local Ollama",
+  "model": "bge-m3:latest",
+  "query": "小猫需要什么",
+  "semantic_relevance": 0.7504421837089124,
+  "checks": [
+    "local neural embedding",
+    "hybrid lexical rerank",
+    "synonym-style query match",
+    "learning page retrieval",
+    "no browser runtime errors"
+  ],
+  "cloud_used": false,
+  "synthetic_data": true
+}

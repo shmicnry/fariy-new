@@ -5,6 +5,9 @@ Fairy 0.3 includes a read-only Mac bridge inside the local API:
 - `GET /v2/mac/status`: macOS version, executor mode and explicit “permission not probed” states.
 - `GET /v2/mac/apps`: application names and paths; never launches an app.
 - `GET /v2/mac/files?path=`: lists metadata inside configured roots; realpath and symlink escapes are rejected.
+- `Mac 只读界面结构` skill: after explicit grant and macOS Accessibility
+  permission, returns a depth- and node-limited Accessibility Tree for one
+  running app.
 
 The `Mac 启动允许应用` built-in skill can run `/usr/bin/open` only when all of these are true:
 

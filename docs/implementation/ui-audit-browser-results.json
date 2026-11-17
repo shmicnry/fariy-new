@@ -4,11 +4,26 @@
     {
       "route": "overview",
       "heading": "运行总览",
-      "controlCount": 0,
+      "controlCount": 1,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
-      "details": [],
+      "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgba(57, 84, 101, 0.17)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        }
+      ],
       "activeCurrent": true,
       "horizontalOverflow": false,
       "runtimeError": "",
@@ -17,11 +32,25 @@
     {
       "route": "mind",
       "heading": "识海与认知",
-      "controlCount": 1,
+      "controlCount": 2,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgba(57, 84, 101, 0.17)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "button",
           "type": "button",
@@ -51,11 +80,25 @@
     {
       "route": "world",
       "heading": "世界与知识",
-      "controlCount": 14,
+      "controlCount": 15,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -261,11 +304,25 @@
     {
       "route": "memories",
       "heading": "记忆审阅",
-      "controlCount": 9,
+      "controlCount": 10,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "button",
           "type": "button",
@@ -401,11 +458,25 @@
     {
       "route": "models",
       "heading": "模型与路由",
-      "controlCount": 19,
+      "controlCount": 20,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": "text",
@@ -681,11 +752,25 @@
     {
       "route": "learning",
       "heading": "学习中心",
-      "controlCount": 8,
+      "controlCount": 17,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -797,6 +882,118 @@
           "disabled": false,
           "invalid": false,
           "clipped": false
+        },
+        {
+          "tag": "textarea",
+          "type": null,
+          "name": "练习答案",
+          "width": 760,
+          "height": 112,
+          "fontSize": "14px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "textarea",
+          "type": null,
+          "name": "原文依据",
+          "width": 760,
+          "height": 112,
+          "fontSize": "14px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "提交有出处的练习",
+          "width": 136.1,
+          "height": 36,
+          "fontSize": "13px",
+          "borderColor": "rgba(0, 0, 0, 0)",
+          "background": "rgb(35, 95, 121)",
+          "color": "rgb(255, 255, 255)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "查看练习记录",
+          "width": 109.6,
+          "height": 36,
+          "fontSize": "13px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "评定练习与查看效果",
+          "width": 149.3,
+          "height": 36,
+          "fontSize": "13px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "textarea",
+          "type": null,
+          "name": "最终确认依据",
+          "width": 760,
+          "height": 112,
+          "fontSize": "14px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "记录通过",
+          "width": 83,
+          "height": 36,
+          "fontSize": "13px",
+          "borderColor": "rgba(0, 0, 0, 0)",
+          "background": "rgb(35, 95, 121)",
+          "color": "rgb(255, 255, 255)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "需要练习",
+          "width": 83,
+          "height": 36,
+          "fontSize": "13px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
         }
       ],
       "activeCurrent": true,
@@ -807,11 +1004,25 @@
     {
       "route": "assessments",
       "heading": "学习测验",
-      "controlCount": 8,
+      "controlCount": 9,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -933,11 +1144,25 @@
     {
       "route": "evolution",
       "heading": "自主与进化",
-      "controlCount": 7,
+      "controlCount": 8,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": "checkbox",
@@ -1045,11 +1270,39 @@
     {
       "route": "skills",
       "heading": "技能中心",
-      "controlCount": 5,
+      "controlCount": 7,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "安装并检查",
+          "width": 96.3,
+          "height": 36,
+          "fontSize": "13px",
+          "borderColor": "rgba(0, 0, 0, 0)",
+          "background": "rgb(35, 95, 121)",
+          "color": "rgb(255, 255, 255)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "button",
           "type": "button",
@@ -1129,11 +1382,53 @@
     {
       "route": "mac",
       "heading": "Mac 操作",
-      "controlCount": 6,
+      "controlCount": 1,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        }
+      ],
+      "activeCurrent": true,
+      "horizontalOverflow": false,
+      "runtimeError": "",
+      "dialog": null
+    },
+    {
+      "route": "flows",
+      "heading": "流程管理",
+      "controlCount": 7,
+      "unnamed": [],
+      "tooSmall": [],
+      "clipped": [],
+      "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -1225,26 +1520,27 @@
       "dialog": null
     },
     {
-      "route": "flows",
-      "heading": "流程管理",
-      "controlCount": 0,
-      "unnamed": [],
-      "tooSmall": [],
-      "clipped": [],
-      "details": [],
-      "activeCurrent": true,
-      "horizontalOverflow": false,
-      "runtimeError": "",
-      "dialog": null
-    },
-    {
       "route": "pet",
       "heading": "桌宠与形象",
-      "controlCount": 3,
+      "controlCount": 4,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": "checkbox",
@@ -1296,11 +1592,25 @@
     {
       "route": "cards",
       "heading": "卡片与通知",
-      "controlCount": 4,
+      "controlCount": 6,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -1344,6 +1654,20 @@
           "clipped": false
         },
         {
+          "tag": "input",
+          "type": "datetime-local",
+          "name": "提醒时间（可选）",
+          "width": 760,
+          "height": 41.7,
+          "fontSize": "14px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
           "tag": "button",
           "type": "button",
           "name": "创建卡片",
@@ -1366,11 +1690,25 @@
     {
       "route": "approvals",
       "heading": "待确认操作",
-      "controlCount": 3,
+      "controlCount": 4,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -1422,11 +1760,25 @@
     {
       "route": "chat",
       "heading": "对话",
-      "controlCount": 5,
+      "controlCount": 6,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "select",
           "type": null,
@@ -1506,11 +1858,26 @@
     {
       "route": "overview",
       "heading": "运行总览",
-      "controlCount": 0,
+      "controlCount": 1,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
-      "details": [],
+      "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        }
+      ],
       "activeCurrent": true,
       "horizontalOverflow": false,
       "runtimeError": "",
@@ -1519,11 +1886,25 @@
     {
       "route": "mind",
       "heading": "识海与认知",
-      "controlCount": 1,
+      "controlCount": 2,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "button",
           "type": "button",
@@ -1553,11 +1934,25 @@
     {
       "route": "world",
       "heading": "世界与知识",
-      "controlCount": 14,
+      "controlCount": 15,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -1763,11 +2158,25 @@
     {
       "route": "memories",
       "heading": "记忆审阅",
-      "controlCount": 9,
+      "controlCount": 10,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "button",
           "type": "button",
@@ -1903,11 +2312,25 @@
     {
       "route": "models",
       "heading": "模型与路由",
-      "controlCount": 19,
+      "controlCount": 20,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": "text",
@@ -2183,11 +2606,25 @@
     {
       "route": "learning",
       "heading": "学习中心",
-      "controlCount": 8,
+      "controlCount": 17,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -2299,6 +2736,118 @@
           "disabled": false,
           "invalid": false,
           "clipped": false
+        },
+        {
+          "tag": "textarea",
+          "type": null,
+          "name": "练习答案",
+          "width": 322,
+          "height": 71.6,
+          "fontSize": "16px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "textarea",
+          "type": null,
+          "name": "原文依据",
+          "width": 322,
+          "height": 71.6,
+          "fontSize": "16px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "提交有出处的练习",
+          "width": 136.1,
+          "height": 44,
+          "fontSize": "13px",
+          "borderColor": "rgba(0, 0, 0, 0)",
+          "background": "rgb(35, 95, 121)",
+          "color": "rgb(255, 255, 255)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "查看练习记录",
+          "width": 109.6,
+          "height": 44,
+          "fontSize": "13px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "评定练习与查看效果",
+          "width": 149.3,
+          "height": 44,
+          "fontSize": "13px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "textarea",
+          "type": null,
+          "name": "最终确认依据",
+          "width": 322,
+          "height": 71.6,
+          "fontSize": "16px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "记录通过",
+          "width": 83,
+          "height": 44,
+          "fontSize": "13px",
+          "borderColor": "rgba(0, 0, 0, 0)",
+          "background": "rgb(35, 95, 121)",
+          "color": "rgb(255, 255, 255)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "需要练习",
+          "width": 83,
+          "height": 44,
+          "fontSize": "13px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
         }
       ],
       "activeCurrent": true,
@@ -2309,11 +2858,25 @@
     {
       "route": "assessments",
       "heading": "学习测验",
-      "controlCount": 8,
+      "controlCount": 9,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -2435,11 +2998,25 @@
     {
       "route": "evolution",
       "heading": "自主与进化",
-      "controlCount": 7,
+      "controlCount": 8,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": "checkbox",
@@ -2547,11 +3124,39 @@
     {
       "route": "skills",
       "heading": "技能中心",
-      "controlCount": 5,
+      "controlCount": 7,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "安装并检查",
+          "width": 96.3,
+          "height": 44,
+          "fontSize": "13px",
+          "borderColor": "rgba(0, 0, 0, 0)",
+          "background": "rgb(35, 95, 121)",
+          "color": "rgb(255, 255, 255)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "button",
           "type": "button",
@@ -2631,11 +3236,25 @@
     {
       "route": "mac",
       "heading": "Mac 操作",
-      "controlCount": 6,
+      "controlCount": 7,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -2729,11 +3348,26 @@
     {
       "route": "flows",
       "heading": "流程管理",
-      "controlCount": 0,
+      "controlCount": 1,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
-      "details": [],
+      "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        }
+      ],
       "activeCurrent": true,
       "horizontalOverflow": false,
       "runtimeError": "",
@@ -2742,11 +3376,25 @@
     {
       "route": "pet",
       "heading": "桌宠与形象",
-      "controlCount": 3,
+      "controlCount": 4,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": "checkbox",
@@ -2798,11 +3446,25 @@
     {
       "route": "cards",
       "heading": "卡片与通知",
-      "controlCount": 4,
+      "controlCount": 6,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -2846,6 +3508,20 @@
           "clipped": false
         },
         {
+          "tag": "input",
+          "type": "datetime-local",
+          "name": "提醒时间（可选）",
+          "width": 322,
+          "height": 44.8,
+          "fontSize": "16px",
+          "borderColor": "rgb(184, 200, 210)",
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(26, 46, 61)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
           "tag": "button",
           "type": "button",
           "name": "创建卡片",
@@ -2868,11 +3544,25 @@
     {
       "route": "approvals",
       "heading": "待确认操作",
-      "controlCount": 3,
+      "controlCount": 4,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -2924,11 +3614,25 @@
     {
       "route": "chat",
       "heading": "对话",
-      "controlCount": 5,
+      "controlCount": 6,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 44,
+          "height": 44,
+          "fontSize": "20px",
+          "borderColor": "rgba(57, 84, 101, 0.17)",
+          "background": "rgb(243, 247, 249)",
+          "color": "rgb(80, 103, 121)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "select",
           "type": null,
@@ -3008,11 +3712,25 @@
     {
       "route": "models",
       "heading": "模型与路由",
-      "controlCount": 19,
+      "controlCount": 20,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(177, 203, 219, 0.14)",
+          "background": "rgb(20, 35, 45)",
+          "color": "rgb(7, 24, 33)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": "text",
@@ -3288,11 +4006,25 @@
     {
       "route": "learning",
       "heading": "学习中心",
-      "controlCount": 8,
+      "controlCount": 17,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(177, 203, 219, 0.14)",
+          "background": "rgb(20, 35, 45)",
+          "color": "rgb(7, 24, 33)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": null,
@@ -3404,6 +4136,118 @@
           "disabled": false,
           "invalid": false,
           "clipped": false
+        },
+        {
+          "tag": "textarea",
+          "type": null,
+          "name": "练习答案",
+          "width": 760,
+          "height": 112,
+          "fontSize": "14px",
+          "borderColor": "rgb(64, 85, 99)",
+          "background": "rgb(23, 38, 48)",
+          "color": "rgb(232, 240, 245)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "textarea",
+          "type": null,
+          "name": "原文依据",
+          "width": 760,
+          "height": 112,
+          "fontSize": "14px",
+          "borderColor": "rgb(64, 85, 99)",
+          "background": "rgb(23, 38, 48)",
+          "color": "rgb(232, 240, 245)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "提交有出处的练习",
+          "width": 136.1,
+          "height": 36,
+          "fontSize": "13px",
+          "borderColor": "rgba(0, 0, 0, 0)",
+          "background": "rgb(87, 164, 197)",
+          "color": "rgb(7, 24, 33)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "查看练习记录",
+          "width": 109.6,
+          "height": 36,
+          "fontSize": "13px",
+          "borderColor": "rgb(64, 85, 99)",
+          "background": "rgb(27, 43, 55)",
+          "color": "rgb(232, 240, 245)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "评定练习与查看效果",
+          "width": 149.3,
+          "height": 36,
+          "fontSize": "13px",
+          "borderColor": "rgb(64, 85, 99)",
+          "background": "rgb(27, 43, 55)",
+          "color": "rgb(232, 240, 245)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "textarea",
+          "type": null,
+          "name": "最终确认依据",
+          "width": 760,
+          "height": 112,
+          "fontSize": "14px",
+          "borderColor": "rgb(64, 85, 99)",
+          "background": "rgb(23, 38, 48)",
+          "color": "rgb(232, 240, 245)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "记录通过",
+          "width": 83,
+          "height": 36,
+          "fontSize": "13px",
+          "borderColor": "rgba(0, 0, 0, 0)",
+          "background": "rgb(87, 164, 197)",
+          "color": "rgb(7, 24, 33)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "需要练习",
+          "width": 83,
+          "height": 36,
+          "fontSize": "13px",
+          "borderColor": "rgb(64, 85, 99)",
+          "background": "rgb(27, 43, 55)",
+          "color": "rgb(232, 240, 245)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
         }
       ],
       "activeCurrent": true,
@@ -3414,11 +4258,25 @@
     {
       "route": "evolution",
       "heading": "自主与进化",
-      "controlCount": 7,
+      "controlCount": 8,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(177, 203, 219, 0.14)",
+          "background": "rgb(20, 35, 45)",
+          "color": "rgb(7, 24, 33)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "input",
           "type": "checkbox",
@@ -3526,11 +4384,25 @@
     {
       "route": "chat",
       "heading": "对话",
-      "controlCount": 5,
+      "controlCount": 6,
       "unnamed": [],
       "tooSmall": [],
       "clipped": [],
       "details": [
+        {
+          "tag": "button",
+          "type": "button",
+          "name": "打开通知中心",
+          "width": 30,
+          "height": 30,
+          "fontSize": "20px",
+          "borderColor": "rgba(177, 203, 219, 0.14)",
+          "background": "rgb(20, 35, 45)",
+          "color": "rgb(7, 24, 33)",
+          "disabled": false,
+          "invalid": false,
+          "clipped": false
+        },
         {
           "tag": "select",
           "type": null,

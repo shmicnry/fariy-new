@@ -1,0 +1,13 @@
+{
+  "status": "passed",
+  "checks": [
+    "SSE event refresh on approvals page",
+    "notification badge from background event",
+    "dirty form preserved with refresh notice",
+    "notification center shows multiple event types",
+    "mark all notifications read",
+    "no browser runtime errors"
+  ],
+  "synthetic_data": true,
+  "external_push_tested": false
+}

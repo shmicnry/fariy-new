@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import zipfile
 import xml.etree.ElementTree as ET
 
@@ -86,12 +87,62 @@ def extract_pdf(raw):
     return join_segments(parts)
 
 
+def extract_image(raw, suffix):
+    if sys.platform != "darwin":
+        raise ValueError("macos_vision_ocr_required")
+    configured = os.getenv("FAIRY_MAC_BRIDGE_EXECUTABLE", "").strip()
+    helper = (
+        Path(configured)
+        if configured
+        else Path(__file__).resolve().parents[2]
+        / "apps"
+        / "mac-bridge"
+        / "FairyMacBridge"
+        / ".build"
+        / "release"
+        / "FairyMacBridge"
+    )
+    if not helper.is_file():
+        raise ValueError("macos_vision_ocr_helper_not_built")
+    with tempfile.TemporaryDirectory(prefix="fairy-ocr-") as directory:
+        path = Path(directory) / ("image" + suffix)
+        path.write_bytes(raw)
+        try:
+            process = subprocess.run(
+                [str(helper), "ocr", str(path)],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+                env={"PATH": os.defpath},
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            raise ValueError("macos_vision_ocr_failed")
+    if process.returncode != 0:
+        raise ValueError("macos_vision_ocr_failed")
+    try:
+        payload = json.loads(process.stdout)
+    except (ValueError, TypeError):
+        raise ValueError("macos_vision_ocr_failed")
+    lines = [
+        ("line:" + str(index), item.get("text", ""))
+        for index, item in enumerate(payload.get("lines", []), 1)
+        if isinstance(item, dict) and item.get("text", "").strip()
+    ]
+    result = join_segments(lines)
+    result["method"] = "macos_vision_ocr"
+    result["ocr"] = True
+    return result
+
+
 def extract(raw, suffix):
     if suffix in (".txt", ".md"):
         value = raw.decode("utf-8-sig")
         if "\x00" in value:
             raise ValueError("invalid_text_file")
         return join_segments([("text", value)])
+    if suffix in (".png", ".jpg", ".jpeg", ".heic", ".tiff"):
+        return extract_image(raw, suffix)
     if suffix not in (".pdf", ".docx"):
         raise ValueError("unsupported_file_format")
     # No inherited provider credentials, shell, external document resources, or output files.

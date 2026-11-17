@@ -81,6 +81,7 @@ async function source(ui, id, parent) {
 
 export async function renderModels(ui) {
     const cfg = await ui.api('models/config');
+    const semantic = await ui.api('semantic/status').catch(() => null);
     const local = ui.panel('本地主模型');
     local.append(ui.el('p', '每轮先交给本机 Ollama。切换模型不会下载新模型。', 'muted'));
     const url = field(ui, local, 'Ollama 地址', cfg.ollama_base_url);
@@ -170,6 +171,16 @@ export async function renderModels(ui) {
     const rows = await ui.api('models/invocations?limit=10');
     for (const r of rows.reverse()) journal.append(ui.el('p', (r.phase === 'local' ? '本机' : '云端') + ' · ' + r.model + ' · ' + r.status + (r.reason ? ' · ' + r.reason : '')));
     if (!rows.length) journal.append(ui.el('p', '还没有发出模型请求。', 'muted'));
+    const retrieval = ui.panel('本地语义检索');
+    retrieval.append(
+        ui.el(
+            'p',
+            semantic?.enabled
+                ? '学习资料使用 ' + semantic.model + ' 做本机神经向量重排；向量缓存在本地数据库，不调用云服务。'
+                : '神经向量模型未启用；学习资料使用本地字符向量与词法混合检索。',
+            semantic?.enabled ? 'muted' : 'route-note'
+        )
+    );
 }
 
 export async function renderMemories(ui) {
@@ -270,39 +281,51 @@ export async function renderConversation(ui) {
     ], 'auto');
     const text = field(ui, p, '输入消息', '', 'textarea');
     text.placeholder = '例如：请记住，我喜欢喝茉莉花茶。';
+    const voice = await ui.api('voice/status').catch(() => ({
+        local_tts: false,
+        local_asr: false,
+    }));
     const speechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const voiceInput = ui.el('button', '语音输入');
+    const localAsr = Boolean(
+        voice.local_asr
+        && navigator.mediaDevices?.getUserMedia
+        && window.MediaRecorder
+    );
+    const voiceInput = ui.el('button', localAsr ? '本地语音输入' : '语音输入');
     const speakReply = ui.el('button', '朗读最新回答');
-    voiceInput.setAttribute('aria-label', '语音输入');
+    voiceInput.setAttribute('aria-label', localAsr ? '本地语音输入' : '语音输入');
     speakReply.setAttribute('aria-label', '朗读最新回答');
-    if (!speechRecognition) {
+    if (!localAsr && !speechRecognition) {
         voiceInput.disabled = true;
         voiceInput.title = '当前浏览器不提供语音识别';
     }
-    if (!('speechSynthesis' in window)) {
+    if (!voice.local_tts && !('speechSynthesis' in window)) {
         speakReply.disabled = true;
         speakReply.title = '当前浏览器不提供语音合成';
     }
     const speechStatus = ui.el(
         'p',
-        speechRecognition
-            ? '浏览器语音识别可能由系统或浏览器供应商处理音频；这不经过 Fairy 云模型，但不等于本地识别。'
-            : '当前浏览器不提供语音识别；文字对话仍可使用。',
+        localAsr
+            ? '本地 Whisper 转写：录音只写入临时目录，转写完成后删除，不经过云模型。'
+            : speechRecognition
+                ? '本地 ASR 尚未配置，当前使用浏览器语音识别；音频可能由系统或浏览器供应商处理。'
+                : '本地 ASR 尚未配置，当前浏览器也不提供语音识别；文字对话仍可使用。',
         'muted'
     );
     const composerTools = ui.el('div', undefined, 'composer-tools');
     composerTools.append(voiceInput, speakReply);
     p.append(composerTools, speechStatus);
     let recognition = null;
-    voiceInput.onclick = () => {
-        if (!speechRecognition) return;
-        if (recognition) {
-            recognition.stop();
-            recognition = null;
-            voiceInput.textContent = '语音输入';
-            speechStatus.textContent = '';
-            return;
-        }
+    let mediaRecorder = null;
+    let mediaStream = null;
+    let recordingChunks = [];
+    let localAudio = null;
+    let localAudioUrl = null;
+    const appendTranscript = transcript => {
+        const before = text.value.trim();
+        text.value = [before, transcript.trim()].filter(Boolean).join(' ');
+    };
+    const startWebSpeech = () => {
         recognition = new speechRecognition();
         recognition.lang = 'zh-CN';
         recognition.interimResults = true;
@@ -324,18 +347,100 @@ export async function renderConversation(ui) {
             speechStatus.textContent = text.value ? '语音已转为可编辑文字。' : '';
         };
         voiceInput.textContent = '停止听写';
-        speechStatus.textContent = '正在听写……';
+        speechStatus.textContent = '正在通过浏览器听写……';
         recognition.start();
     };
+    const transcribeLocalAudio = async (mimeType = 'audio/webm') => {
+        const bytes = new Uint8Array(await new Blob(recordingChunks, {type: mimeType}).arrayBuffer());
+        if (bytes.byteLength > 10_000_000) throw Error('录音超过 10 MB 上限');
+        let binary = '';
+        for (const byte of bytes) binary += String.fromCharCode(byte);
+        const result = await ui.api('voice/transcribe', 'POST', {
+            audio_base64: btoa(binary),
+            media_type: mimeType,
+            language: 'zh',
+        });
+        appendTranscript(result.text);
+    };
+    const startLocalRecording = async () => {
+        try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({audio: true});
+            recordingChunks = [];
+            mediaRecorder = new MediaRecorder(mediaStream);
+            mediaRecorder.ondataavailable = event => {
+                if (event.data.size) recordingChunks.push(event.data);
+            };
+            mediaRecorder.onstop = async () => {
+                const mimeType = (mediaRecorder?.mimeType || 'audio/webm').split(';')[0];
+                mediaStream?.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+                voiceInput.textContent = '本地语音输入';
+                speechStatus.textContent = '正在使用本地 Whisper 转写……';
+                try {
+                    await transcribeLocalAudio(mimeType);
+                    speechStatus.textContent = text.value ? '语音已转为可编辑文字。' : '没有识别到语言。';
+                } catch (error) {
+                    speechStatus.textContent = '本地语音转写失败：' + error.message;
+                } finally {
+                    mediaRecorder = null;
+                }
+            };
+            mediaRecorder.start();
+            voiceInput.textContent = '停止本地录音';
+            speechStatus.textContent = '正在本地录音；再次点击停止并转写。';
+        } catch (error) {
+            speechStatus.textContent = '无法开始录音：' + error.message;
+            mediaStream?.getTracks().forEach(track => track.stop());
+            mediaStream = null;
+        }
+    };
+    voiceInput.onclick = async () => {
+        if (localAsr) {
+            if (mediaRecorder?.state === 'recording') {
+                mediaRecorder.stop();
+            } else {
+                await startLocalRecording();
+            }
+            return;
+        }
+        if (!speechRecognition) return;
+        if (recognition) {
+            recognition.stop();
+            recognition = null;
+            voiceInput.textContent = '语音输入';
+            speechStatus.textContent = '';
+            return;
+        }
+        startWebSpeech();
+    };
     let latestTurns = [];
-    speakReply.onclick = () => {
+    speakReply.onclick = async () => {
         const reply = [...latestTurns].reverse().find(turn => turn.reply)?.reply;
-        if (!reply || !('speechSynthesis' in window)) return;
+        if (!reply) {
+            speechStatus.textContent = '还没有可朗读的回答。';
+            return;
+        }
+        if (voice.local_tts) {
+            speechStatus.textContent = '正在生成本机语音……';
+            try {
+                const response = await ui.apiResponse('voice/speak', 'POST', {text: reply});
+                if (localAudioUrl) URL.revokeObjectURL(localAudioUrl);
+                localAudioUrl = URL.createObjectURL(await response.blob());
+                localAudio = new Audio(localAudioUrl);
+                localAudio.onended = () => speechStatus.textContent = '本地朗读完成。';
+                await localAudio.play();
+                speechStatus.textContent = '正在本地朗读最新回答。';
+            } catch (error) {
+                speechStatus.textContent = '本机朗读失败：' + error.message;
+            }
+            return;
+        }
+        if (!('speechSynthesis' in window)) return;
         speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(reply);
         utterance.lang = 'zh-CN';
         speechSynthesis.speak(utterance);
-        speechStatus.textContent = '正在朗读最新回答。';
+        speechStatus.textContent = '正在通过浏览器朗读最新回答。';
     };
     const progress = ui.el('p', '记忆提案需要你在「记忆审阅」中确认。', 'muted');
     p.append(progress);
@@ -402,9 +507,9 @@ export async function renderConversation(ui) {
 }
 
 // SSE carries the bearer in a header, never in a URL. Cursor survives reconnects in memory.
-export function watchEvents(getToken, onEvent, onConnection) {
+export function watchEvents(getToken, onEvent, onConnection, initialCursor = 0) {
     const abort = new AbortController();
-    let cursor = 0;
+    let cursor = Math.max(0, Number(initialCursor) || 0);
     let stopped = false;
     const reconnect = ms => new Promise(resolve => {
         const done = () => {

@@ -12,6 +12,9 @@ struct ChatTurn: Codable, Identifiable {
 struct Capabilities: Codable {
     let primaryProvider: String?
     let reviewedMemory: Bool?
+    let workerStatusEndpoint: Bool?
+    let crossPageEventSync: Bool?
+    let localNotificationCenter: Bool?
 }
 
 struct MemoryItem: Codable, Identifiable {
@@ -19,20 +22,25 @@ struct MemoryItem: Codable, Identifiable {
     let text: String
     let revision: Int
     let subject: String?
+    let sourceIds: [String]
 }
 
 struct CourseItem: Codable, Identifiable {
     let id: String
     let title: String
+    let revision: Int
     let stage: String
     let mastered: Bool
+    let sourceEligible: Bool?
 }
 
 struct ApprovalItem: Codable, Identifiable {
     let id: String
+    let revision: Int
     let title: String
     let text: String
     let decision: String?
+    let digest: String
     let expiresAt: String
 }
 
@@ -40,6 +48,53 @@ struct ModelSummary: Codable {
     let ollamaModel: String?
     let cloudReady: Bool?
     let cloudContext: String?
+}
+
+struct SemanticSummary: Codable {
+    let enabled: Bool
+    let provider: String
+    let model: String
+    let cloudUsed: Bool
+}
+
+struct SkillItem: Codable, Identifiable {
+    let id: String
+    let revision: Int
+    let name: String
+    let version: String
+    let purpose: String
+    let permissions: [String]
+    let implementation: String
+    let installed: Bool
+    let enabled: Bool
+}
+
+struct AutonomyBudget: Codable {
+    let enabled: Bool
+    let dailyMinutes: Int
+    let usedMinutes: Int
+    let remainingMinutes: Int
+    let dailyItems: Int
+    let usedItems: Int
+    let remainingItems: Int
+}
+
+struct AutonomyCandidate: Codable, Identifiable {
+    let id: String
+    let revision: Int
+    let title: String
+    let reason: String
+    let question: String
+    let estimatedMinutes: Int
+    let origin: String
+    let status: String
+}
+
+struct WorkerStatus: Codable {
+    let status: String?
+    let alive: Bool?
+    let heartbeatAt: String?
+    let error: String?
 }
 
 actor FairyAPI {
@@ -52,7 +107,16 @@ actor FairyAPI {
     }
 
     private func request(_ path: String, method: String = "GET", body: Data? = nil) async throws -> Data {
-        var request = URLRequest(url: baseURL.appending(path: "v2").appending(path: path))
+        let components = path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        var url = baseURL.appending(path: "v2")
+        for component in components[0].split(separator: "/") {
+            url.append(path: String(component))
+        }
+        if components.count > 1, var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            urlComponents.percentEncodedQuery = String(components[1])
+            if let resolved = urlComponents.url { url = resolved }
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -61,53 +125,167 @@ actor FairyAPI {
             request.setValue(UUID().uuidString, forHTTPHeaderField: "Idempotency-Key")
         }
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+        guard let http = response as? HTTPURLResponse else {
             throw URLError(.badServerResponse)
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let detail = String(data: data, encoding: .utf8) ?? "HTTP \(http.statusCode)"
+            throw NSError(
+                domain: "FairyAPI",
+                code: http.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: detail]
+            )
         }
         return data
     }
 
+    private func encode(_ dictionary: [String: Any]) throws -> Data {
+        try JSONSerialization.data(withJSONObject: dictionary)
+    }
+
+    private var decoder: JSONDecoder {
+        let value = JSONDecoder()
+        value.keyDecodingStrategy = .convertFromSnakeCase
+        return value
+    }
+
     func capabilities() async throws -> Capabilities {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(Capabilities.self, from: await request("capabilities"))
     }
 
     func turns() async throws -> [ChatTurn] {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode([ChatTurn].self, from: await request("turns"))
     }
 
     func send(_ text: String) async throws -> ChatTurn {
         let body = try JSONEncoder().encode(["text": text, "routing": "auto"])
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(ChatTurn.self, from: await request("turns", method: "POST", body: body))
     }
 
     func memories() async throws -> [MemoryItem] {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode([MemoryItem].self, from: await request("memories"))
     }
 
     func courses() async throws -> [CourseItem] {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode([CourseItem].self, from: await request("learning/courses"))
     }
 
     func approvals() async throws -> [ApprovalItem] {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode([ApprovalItem].self, from: await request("approvals"))
     }
 
     func modelSummary() async throws -> ModelSummary {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try decoder.decode(ModelSummary.self, from: await request("models/config"))
+    }
+
+    func semanticSummary() async throws -> SemanticSummary {
+        return try decoder.decode(SemanticSummary.self, from: await request("semantic/status"))
+    }
+
+    func correctMemory(id: String, revision: Int, text: String, reason: String) async throws -> MemoryItem {
+        let body = try encode(["revision": revision, "text": text, "reason": reason])
+        return try decoder.decode(
+            MemoryItem.self,
+            from: await request("memories/\(id)", method: "PATCH", body: body)
+        )
+    }
+
+    func forgetMemory(id: String, revision: Int) async throws -> MemoryItem {
+        try decoder.decode(
+            MemoryItem.self,
+            from: await request("memories/\(id)?revision=\(revision)", method: "DELETE")
+        )
+    }
+
+    func assessCourse(id: String, revision: Int, passed: Bool, evidence: String) async throws -> CourseItem {
+        let body = try encode(["revision": revision, "passed": passed, "evidence": evidence])
+        return try decoder.decode(
+            CourseItem.self,
+            from: await request("learning/courses/\(id)/assess", method: "POST", body: body)
+        )
+    }
+
+    func chooseApproval(_ approval: ApprovalItem, choice: String) async throws -> ApprovalItem {
+        let body = try encode([
+            "revision": approval.revision,
+            "action_digest": approval.digest,
+            "choice": choice,
+        ])
+        return try decoder.decode(
+            ApprovalItem.self,
+            from: await request("approvals/\(approval.id)/choices", method: "POST", body: body)
+        )
+    }
+
+    func skills() async throws -> [SkillItem] {
+        try decoder.decode([SkillItem].self, from: await request("skills/registry"))
+    }
+
+    func installSkill(_ id: String) async throws -> SkillItem {
+        try decoder.decode(
+            SkillItem.self,
+            from: await request("skills/registry/\(id)/install", method: "POST", body: try encode([:]))
+        )
+    }
+
+    func enableSkill(_ skill: SkillItem) async throws {
+        let body = try encode([
+            "revision": skill.revision,
+            "permissions": skill.permissions,
+            "expires_minutes": 60,
+        ])
+        _ = try await request("skills/registry/\(skill.id)/grant", method: "POST", body: body)
+    }
+
+    func disableSkill(_ id: String) async throws {
+        _ = try await request("skills/registry/\(id)/disable", method: "POST", body: try encode([:]))
+    }
+
+    func invokeSkill(_ id: String, query: String) async throws -> String {
+        let body = try encode(["query": query, "path": NSNull()])
+        let data = try await request(
+            "skills/registry/\(id)/invoke",
+            method: "POST",
+            body: body
+        )
+        let object = try JSONSerialization.jsonObject(with: data)
+        let formatted = try JSONSerialization.data(
+            withJSONObject: object,
+            options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        )
+        return String(data: formatted, encoding: .utf8) ?? "{}"
+    }
+
+    func autonomyBudget() async throws -> AutonomyBudget {
+        try decoder.decode(AutonomyBudget.self, from: await request("autonomy/budget"))
+    }
+
+    func autonomyCandidates() async throws -> [AutonomyCandidate] {
+        try decoder.decode([AutonomyCandidate].self, from: await request("autonomy/candidates"))
+    }
+
+    func refreshAutonomy() async throws {
+        _ = try await request("autonomy/refresh", method: "POST", body: try encode([:]))
+    }
+
+    func acceptCandidate(_ candidate: AutonomyCandidate) async throws {
+        _ = try await request(
+            "autonomy/candidates/\(candidate.id)/accept",
+            method: "POST",
+            body: encode(["revision": candidate.revision])
+        )
+    }
+
+    func dismissCandidate(_ candidate: AutonomyCandidate) async throws {
+        _ = try await request(
+            "autonomy/candidates/\(candidate.id)/dismiss",
+            method: "POST",
+            body: encode(["revision": candidate.revision])
+        )
+    }
+
+    func workerStatus() async throws -> WorkerStatus {
+        try decoder.decode(WorkerStatus.self, from: await request("worker/status"))
     }
 }
 

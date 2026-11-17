@@ -52,9 +52,43 @@ class MacBridge:
         except (OSError, subprocess.TimeoutExpired):
             return None, None
 
+    @staticmethod
+    def _helper_status():
+        configured = os.getenv("FAIRY_MAC_BRIDGE_EXECUTABLE", "").strip()
+        default = (
+            Path(__file__).resolve().parents[2]
+            / "apps"
+            / "mac-bridge"
+            / "FairyMacBridge"
+            / ".build"
+            / "release"
+            / "FairyMacBridge"
+        )
+        executable = Path(configured) if configured else default
+        if not executable.is_file():
+            return None
+        try:
+            process = subprocess.run(
+                [str(executable), "status"],
+                capture_output=True,
+                text=True,
+                timeout=4,
+                check=False,
+            )
+            if process.returncode != 0:
+                return None
+            payload = json.loads(process.stdout)
+            if payload.get("bridge") != "fairy-mac-bridge":
+                return None
+            return payload
+        except (OSError, subprocess.TimeoutExpired, ValueError, TypeError):
+            return None
+
     def status(self):
         config = self._config()
         version, build = self._sw_vers()
+        helper = self._helper_status()
+        tcc = helper.get("tcc", {}) if helper else {}
         return {
             "platform": sys_platform(),
             "machine": platform.machine(),
@@ -64,8 +98,17 @@ class MacBridge:
             "executor_mode": "execute" if config.get("mac_execute") else "observe_only",
             "configured_app_count": len(config.get("mac_allowed_apps", [])),
             "configured_path_count": len(config.get("mac_allowed_paths", [])),
-            "accessibility_permission": "unknown_not_probed",
-            "screen_recording_permission": "unknown_not_probed",
+            "accessibility_permission": (
+                tcc.get("accessibility", "unknown_not_probed")
+                if tcc
+                else "unknown_not_probed"
+            ),
+            "screen_recording_permission": (
+                tcc.get("screen_recording", "unknown_not_probed")
+                if tcc
+                else "unknown_not_probed"
+            ),
+            "helper_version": helper.get("version") if helper else None,
             "arbitrary_shell": False,
             "input_injection": False,
             "screen_capture": False,
@@ -195,6 +238,47 @@ class MacBridge:
             "truncated": len(children) > 100,
             "read_only": True,
         }
+
+    def ax_tree(self, bundle_id=None):
+        helper = self._helper_status()
+        if helper is None:
+            fail(503, "mac_bridge_helper_unavailable")
+        configured = os.getenv("FAIRY_MAC_BRIDGE_EXECUTABLE", "").strip()
+        executable = (
+            Path(configured)
+            if configured
+            else Path(__file__).resolve().parents[2]
+            / "apps"
+            / "mac-bridge"
+            / "FairyMacBridge"
+            / ".build"
+            / "release"
+            / "FairyMacBridge"
+        )
+        command = [str(executable), "ax-tree"]
+        if bundle_id:
+            command.append(bundle_id)
+        try:
+            process = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=8,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            fail(503, "mac_ax_tree_failed")
+        if process.returncode != 0:
+            if "accessibility_permission_required" in process.stderr:
+                fail(403, "accessibility_permission_required")
+            fail(503, "mac_ax_tree_failed")
+        try:
+            payload = json.loads(process.stdout)
+        except (ValueError, TypeError):
+            fail(503, "mac_ax_tree_invalid_output")
+        if not isinstance(payload, dict) or not isinstance(payload.get("nodes"), list):
+            fail(503, "mac_ax_tree_invalid_output")
+        return dict(payload, read_only=True, input_injection=False)
 
 
 def sys_platform():

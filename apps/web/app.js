@@ -23,6 +23,9 @@ let token = '',
     stopEvents = null,
     conversation = null;
 let eventRefresh = null;
+let routeDirty = false;
+let pendingUpdates = 0;
+const reminderTimers = new Map();
 const names = {
     overview: '运行总览',
     mind: '识海与认知',
@@ -83,7 +86,7 @@ const icon = name => {
     }
     return svg;
 };
-async function api(path, method = 'GET', body) {
+async function apiResponse(path, method = 'GET', body) {
     const headers = {
         Authorization: 'Bearer ' + token
     };
@@ -97,10 +100,19 @@ async function api(path, method = 'GET', body) {
         body: body ? JSON.stringify(body) : undefined
     });
     if (!r.ok) {
-        const x = await r.json();
-        throw Error(r.status + ' ' + JSON.stringify(x.detail))
+        let detail;
+        try {
+            detail = (await r.json()).detail;
+        } catch {
+            detail = r.statusText;
+        }
+        throw Error(r.status + ' ' + JSON.stringify(detail))
     }
-    return r.json()
+    return r
+}
+async function api(path, method = 'GET', body) {
+    const response = await apiResponse(path, method, body);
+    return response.json()
 }
 const panel = (title) => {
     const p = el('section', undefined, 'panel');
@@ -147,8 +159,160 @@ const openDialog = (title, content) => {
     const dialog = $('detailDialog');
     $('dialogTitle').textContent = title;
     $('dialogBody').replaceChildren(content);
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
 };
+const notificationStorageKey = 'fairy.notifications.v1';
+const eventCursorKey = 'fairy.event-cursor.v1';
+const notificationRoutes = [
+    [/^learning\.chunk_read$/, null, ['learning'], false],
+    [/^memory\.|^sources\./, '记忆与来源已更新', ['mind', 'memories', 'chat']],
+    [/^learning\./, '学习进度已更新', ['overview', 'mind', 'learning', 'assessments', 'evolution']],
+    [/^skill\./, '技能状态已更新', ['skills', 'mac', 'overview']],
+    [/^autonomy\./, '自主学习候选已更新', ['evolution', 'flows', 'overview']],
+    [/^evolution\./, '进化实验已更新', ['evolution', 'flows']],
+    [/^approval\.|^note\./, '待确认操作已更新', ['approvals', 'cards', 'overview']],
+    [/^card\./, '卡片已更新', ['cards']],
+    [/^model\.recovered/, '模型请求状态已恢复', ['chat', 'models', 'overview']]
+];
+function loadNotifications() {
+    try {
+        const data = JSON.parse(localStorage.getItem(notificationStorageKey) || '[]');
+        return Array.isArray(data) ? data.filter(item => item && item.id && item.text) : [];
+    } catch {
+        return [];
+    }
+}
+let notifications = loadNotifications();
+function eventMeta(event) {
+    const match = notificationRoutes.find(([pattern]) => pattern.test(event.type || ''));
+    if (!match) return null;
+    return {text: match[1], routes: match[2], notify: match[3] !== false && Boolean(match[1])};
+}
+function saveNotifications() {
+    notifications = notifications.slice(0, 30);
+    localStorage.setItem(notificationStorageKey, JSON.stringify(notifications));
+    const badge = $('notificationBadge');
+    const unread = notifications.filter(item => !item.read).length;
+    badge.textContent = unread > 9 ? '9+' : String(unread);
+    badge.hidden = unread === 0;
+}
+function addNotification(event, meta) {
+    const id = String(event.seq || event.id || crypto.randomUUID());
+    if (notifications.some(item => item.id === id)) return;
+    notifications.unshift({
+        id,
+        text: meta.text,
+        detail: event.type,
+        routes: meta.routes,
+        createdAt: event.created_at || new Date().toISOString(),
+        read: false
+    });
+    saveNotifications();
+    showSystemNotification(meta);
+}
+async function showSystemNotification(meta) {
+    if (!('Notification' in window) || Notification.permission !== 'granted' || !document.hidden) return;
+    const options = {body: meta.text, tag: 'fairy-' + meta.text, silent: false};
+    try {
+        if ('serviceWorker' in navigator) {
+            const registration = await navigator.serviceWorker.ready;
+            await registration.showNotification('Fairy', options);
+        } else {
+            new Notification('Fairy', options);
+        }
+    } catch {
+        // The in-app notification center remains available when system notifications fail.
+    }
+}
+function showNotificationCenter() {
+    const body = el('div', undefined, 'notification-center');
+    const actions = el('div', undefined, 'button-row');
+    if ('Notification' in window) {
+        const permission = Notification.permission;
+        body.append(el(
+            'p',
+            permission === 'granted'
+                ? '系统通知已授权。页面在后台时，Fairy 会发送简短提醒。'
+                : permission === 'denied'
+                    ? '系统通知已被浏览器拒绝，请在网站设置中重新允许。'
+                    : '系统通知尚未授权；站内通知中心不受影响。',
+            'muted'
+        ));
+        if (permission === 'default') {
+            actions.append(button('启用系统通知', async () => {
+                await Notification.requestPermission();
+                showNotificationCenter();
+            }, 'secondary'));
+        }
+    } else {
+        body.append(el('p', '当前浏览器不支持系统通知；站内通知中心仍可使用。', 'muted'));
+    }
+    if (notifications.length) {
+        actions.append(button('全部标为已读', async () => {
+            notifications = notifications.map(item => ({...item, read: true}));
+            saveNotifications();
+            showNotificationCenter();
+        }, 'secondary'), button('清空通知', async () => {
+            notifications = [];
+            saveNotifications();
+            showNotificationCenter();
+        }, 'danger'));
+    }
+    body.append(actions);
+    if (!notifications.length) {
+        body.append(el('p', '还没有后台更新。', 'muted'));
+    }
+    for (const item of notifications) {
+        const row = el('button', undefined, 'notification-row');
+        row.type = 'button';
+        row.append(
+            el('strong', item.text),
+            el('small', new Date(item.createdAt).toLocaleString() + ' · ' + item.detail),
+            el('span', item.read ? '已读' : '未读', item.read ? 'tag' : 'tag tag-unread')
+        );
+        row.onclick = () => {
+            item.read = true;
+            saveNotifications();
+            $('detailDialog').close();
+            if (item.routes?.[0]) location.hash = item.routes[0];
+        };
+        body.append(row);
+    }
+    openDialog('通知中心', body);
+}
+function showSyncNotice(event, meta) {
+    pendingUpdates += 1;
+    const text = meta.text || '当前页面数据已更新';
+    $('syncNoticeText').textContent = `${text}${pendingUpdates > 1 ? `（${pendingUpdates} 项）` : ''}`;
+    $('syncNotice').hidden = false;
+}
+function scheduleReminders(cards) {
+    const active = new Set();
+    for (const card of cards) {
+        if (!card.remind_at) continue;
+        const at = Date.parse(card.remind_at);
+        if (!Number.isFinite(at) || at <= Date.now()) continue;
+        const key = `${card.id}:${card.revision}:${card.remind_at}`;
+        active.add(key);
+        if (reminderTimers.has(key)) continue;
+        const delay = Math.min(at - Date.now(), 2_147_000_000);
+        const timer = setTimeout(() => {
+            reminderTimers.delete(key);
+            const meta = {text: `提醒：${card.title}`, routes: ['cards'], notify: true};
+            addNotification(
+                {id: `reminder:${key}`, type: 'card.reminder_due', created_at: new Date().toISOString()},
+                meta
+            );
+        }, delay);
+        reminderTimers.set(key, timer);
+    }
+    for (const [key, timer] of reminderTimers) {
+        if (!active.has(key)) {
+            clearTimeout(timer);
+            reminderTimers.delete(key);
+        }
+    }
+}
 async function run(fn) {
     $('error').textContent = '';
     try {
@@ -164,6 +328,9 @@ const statuses = {
     pending: '正在回应',
     interrupted: '已中断',
     failed: '失败',
+    running: '运行中',
+    degraded: '降级运行',
+    missing: '未启动',
     awaiting_assessment: '待人工验证',
     needs_practice: '需要练习'
 };
@@ -179,6 +346,7 @@ function records(p, rows) {
         if (r.error) row.append(el('p', explain(r.error)));
         if (r.summary) row.append(el('p', r.summary));
         if (r.notes) row.append(el('p', r.notes));
+        if (r.remind_at) row.append(el('p', '提醒时间：' + new Date(r.remind_at).toLocaleString(), 'muted'));
         if (r.executable === false) row.append(el('p', '知识条目，无执行权限', 'muted'));
         const details = el('details');
         details.append(el('summary', '查看来源与记录'), el('pre', JSON.stringify(r, null, 2)));
@@ -188,6 +356,9 @@ function records(p, rows) {
 }
 async function render() {
     const route = location.hash.slice(1) || 'overview';
+    routeDirty = false;
+    pendingUpdates = 0;
+    $('syncNotice').hidden = true;
     document.querySelector('main').dataset.route = route;
     $('title').textContent = names[route] || 'Fairy';
     $('content').replaceChildren();
@@ -204,6 +375,7 @@ async function render() {
     conversation = null;
     const ui = {
         api,
+        apiResponse,
         el,
         panel,
         button,
@@ -241,6 +413,10 @@ async function render() {
         records(p, [{
             title: '当前运行状态',
             ...c
+        }]);
+        records(panel('后台 worker'), [{
+            title: '学习与自主任务 worker',
+            ...(await api('worker/status'))
         }]);
         records(panel('持久任务'), await api('jobs'))
     } else if (route === 'mind') {
@@ -283,12 +459,12 @@ async function render() {
         const uploadPanel = panel('学习文件与来源检索');
         const file = el('input');
         file.type = 'file';
-        file.accept = '.txt,.md,.pdf,.docx';
+        file.accept = '.txt,.md,.pdf,.docx,.png,.jpg,.jpeg,.heic,.tiff';
         file.setAttribute('aria-label', '选择文字文件');
-        controlLabel('选择文字文件', file, uploadPanel, '支持 TXT、Markdown、PDF、DOCX，单个文件不超过 1 MiB。');
+        controlLabel('选择学习文件', file, uploadPanel, '支持 TXT、Markdown、PDF、DOCX；macOS 安装只读 helper 后支持 PNG、JPEG、HEIC、TIFF OCR。单个文件不超过 1 MiB。');
         uploadPanel.append(button('上传并学习', async () => {
             const selected = file.files[0];
-            if (!selected) throw Error('请选择 TXT、Markdown、PDF 或 DOCX 文件');
+            if (!selected) throw Error('请选择文字、文档或图片文件');
             if (selected.size > 1048576) throw Error('文件上限为 1 MiB');
             const bytes = new Uint8Array(await selected.arrayBuffer());
             let binary = '';
@@ -404,6 +580,8 @@ async function render() {
         const text = el('textarea');
         text.placeholder = '内容';
         const subtype = el('select');
+        const remindAt = el('input');
+        remindAt.type = 'datetime-local';
         Object.entries({
             note: '便笺',
             todo: '待办',
@@ -416,16 +594,20 @@ async function render() {
         });
         controlLabel('卡片类型', subtype, p);
         controlLabel('内容', text, p);
+        controlLabel('提醒时间（可选）', remindAt, p, '页面打开或安装为 PWA 时，到点触发站内通知；完整后台推送仍需 APNs 或 Web Push。');
         p.append(button('创建卡片', async () => {
             await api('cards', 'POST', {
                 title: title.value,
                 text: text.value,
-                subtype: subtype.value
+                subtype: subtype.value,
+                remind_at: remindAt.value ? new Date(remindAt.value).toISOString() : null
             });
             await render()
         }));
-        p.append(el('p', '自建卡没有审批或执行语义。定时通知尚未接入。', 'muted'));
-        records(panel('已保存卡片'), await api('cards'))
+        p.append(el('p', '自建卡没有审批或执行语义。到点提醒在页面打开或 PWA 活跃时生效。', 'muted'));
+        const cards = await api('cards');
+        scheduleReminders(cards);
+        records(panel('已保存卡片'), cards)
     } else if (route === 'approvals') {
         const p = panel('提出保存笔记操作');
         const title = el('input');
@@ -551,26 +733,57 @@ $('login').onsubmit = e => {
         document.body.classList.add('connected');
         document.body.classList.remove('offline');
         if (stopEvents) stopEvents();
+        const head = await api('events/head');
+        const storedCursor = Number(localStorage.getItem(eventCursorKey) || '0');
+        const initialCursor = Number.isFinite(storedCursor) && storedCursor > 0
+            ? storedCursor
+            : head.seq || 0;
+        localStorage.setItem(eventCursorKey, String(initialCursor));
         stopEvents = watchEvents(() => token, event => {
+            localStorage.setItem(eventCursorKey, String(event.seq || initialCursor));
+            const meta = eventMeta(event);
+            if (meta?.notify) addNotification(event, meta);
             if (conversation) {
                 conversation.onEvent(event);
                 clearTimeout(eventRefresh);
                 eventRefresh = setTimeout(() => run(() => conversation?.refresh()), 100)
             }
-            if (['memory.proposed', 'memory.reviewed', 'memory.corrected', 'sources.invalidated'].includes(event.type)) {
+            if (meta?.routes.includes('memories')) {
                 const label = document.querySelector('#nav a[href="#memories"] span');
                 if (label) label.textContent = '记忆审阅 · 有更新';
+            }
+            const currentRoute = location.hash.slice(1) || 'overview';
+            if (meta?.routes.includes(currentRoute) && currentRoute !== 'chat') {
+                clearTimeout(eventRefresh);
+                if (routeDirty || document.activeElement?.closest('#content input, #content textarea, #content select')) {
+                    showSyncNotice(event, meta);
+                } else {
+                    eventRefresh = setTimeout(() => run(render), 180);
+                }
             }
         }, online => {
             document.body.classList.toggle('offline', !online);
             $('status').textContent = online ? '已连接本机服务' : '连接中断，正在重连……'
-        });
+        }, initialCursor);
         await render()
+        scheduleReminders(await api('cards'))
     })
 };
 run(render);
+saveNotifications();
 
 window.addEventListener('beforeunload', () => stopEvents?.());
+
+$('content').addEventListener('input', () => {
+    routeDirty = true;
+});
+$('content').addEventListener('change', () => {
+    routeDirty = true;
+});
+$('syncRefresh').onclick = () => run(render);
+$('notificationButton').onclick = () => {
+    showNotificationCenter();
+};
 
 const detailDialog = $('detailDialog');
 detailDialog.addEventListener('click', event => {
