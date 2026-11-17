@@ -1,10 +1,20 @@
+import {
+    renderModels,
+    renderMemories,
+    renderConversation,
+    watchEvents
+} from './p1.js';
 // No user/provider data is inserted as raw HTML. The service token stays in memory only.
 let token = '',
-    revision = 0;
+    stopEvents = null,
+    conversation = null;
+let eventRefresh = null;
 const names = {
     overview: '运行总览',
     mind: '识海与认知',
     world: '世界与知识',
+    memories: '记忆审阅',
+    models: '模型与路由',
     learning: '学习中心',
     evolution: '进化实验',
     skills: '技能中心',
@@ -49,7 +59,14 @@ const panel = (title) => {
 };
 const button = (text, fn) => {
     const b = el('button', text);
-    b.onclick = () => run(fn);
+    b.onclick = () => run(async () => {
+        b.disabled = true;
+        try {
+            await fn()
+        } finally {
+            b.disabled = false
+        }
+    });
     return b
 };
 async function run(fn) {
@@ -96,6 +113,23 @@ async function render() {
     document.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', a.hash === '#' + route));
     if (!token) {
         panel('连接后读取真实状态').append(el('p', '请输入 FAIRY_TOKEN。没有连接时不会显示模拟成功或进度。'));
+        return
+    }
+    conversation = null;
+    const ui = {
+        api,
+        el,
+        panel,
+        button,
+        refresh: render
+    };
+    if (route === 'models') return renderModels(ui);
+    if (route === 'memories') {
+        document.querySelector('nav a[href="#memories"]').textContent = names.memories;
+        return renderMemories(ui)
+    }
+    if (route === 'chat') {
+        conversation = await renderConversation(ui);
         return
     }
     if (route === 'overview') {
@@ -223,18 +257,6 @@ async function render() {
                 }))
         }
         records(panel('已执行的站内笔记'), await api('notes'))
-    } else if (route === 'chat') {
-        const p = panel('文字对话');
-        const text = el('textarea');
-        p.append(text, button('发送', async () => {
-            const result = await api('turns', 'POST', {
-                text: text.value
-            });
-            const reply = el('p', result.reply || result.error || result.status);
-            p.append(reply)
-        }));
-        p.append(el('p', '需在服务器配置主模型。有来源记忆与最近对话会进入上下文，当前没有自动记忆提取。', 'muted'));
-        records(panel('回合记录'), await api('turns'))
     } else if (route === 'pet') {
         const configs = await api('config');
         const conf = configs[0] || {
@@ -337,7 +359,23 @@ $('login').onsubmit = e => {
     run(async () => {
         await api('capabilities');
         $('status').textContent = '已连接本机服务';
+        if (stopEvents) stopEvents();
+        stopEvents = watchEvents(() => token, event => {
+            if (conversation) {
+                conversation.onEvent(event);
+                clearTimeout(eventRefresh);
+                eventRefresh = setTimeout(() => run(() => conversation?.refresh()), 100)
+            }
+            if (['memory.proposed', 'memory.reviewed', 'memory.corrected', 'sources.invalidated'].includes(event.type)) {
+                const link = document.querySelector('nav a[href="#memories"]');
+                if (link) link.textContent = '记忆审阅 · 有更新';
+            }
+        }, online => {
+            $('status').textContent = online ? '已连接本机服务' : '连接中断，正在重连……'
+        });
         await render()
     })
 };
 run(render);
+
+window.addEventListener('beforeunload', () => stopEvents?.());

@@ -1,0 +1,79 @@
+{
+  "status": "passed",
+  "primary_provider": "ollama",
+  "model": "qwen3:4b",
+  "synthetic_data": true,
+  "final_answer_policy": "source-grounded expression for supported personal preference questions",
+  "raw_model_draft_quality_claimed": false,
+  "scenario": {
+    "initial_owner_statement": "请记住，我喜欢喝茉莉花茶。",
+    "later_owner_correction": "我现在喜欢喝温水。",
+    "assertions_are_time_ordered": true,
+    "personal_recall_excludes_recent_dialogue": true
+  },
+  "checks": [
+    "real native inference",
+    "automatic exact-quote proposal",
+    "review before recall",
+    "approved recall",
+    "corrected recall",
+    "version history",
+    "restart persistence",
+    "forget removes historical context",
+    "post-forget reply",
+    "no cloud request"
+  ],
+  "results": [
+    {
+      "step": "statement",
+      "input": "请记住，我喜欢喝茉莉花茶。",
+      "reply": "已生成 1 条关于你的待审阅记忆提案，确认后才会保存。",
+      "model": "qwen3:4b",
+      "question_subject": null,
+      "answer_basis": null,
+      "used_memory_ids": []
+    },
+    {
+      "step": "recall",
+      "input": "我喜欢喝什么？",
+      "reply": "根据你已确认的记忆，你喜欢喝茉莉花茶。",
+      "model": "qwen3:4b",
+      "question_subject": "owner",
+      "answer_basis": "confirmed_memory",
+      "used_memory_ids": [
+        "d1f51650-efa2-4274-adeb-590903fcd55c"
+      ]
+    },
+    {
+      "step": "corrected_recall",
+      "input": "我喜欢喝什么？",
+      "reply": "根据你已确认的记忆，你现在喜欢喝温水。",
+      "model": "qwen3:4b",
+      "question_subject": "owner",
+      "answer_basis": "confirmed_memory",
+      "used_memory_ids": [
+        "d1f51650-efa2-4274-adeb-590903fcd55c"
+      ]
+    },
+    {
+      "step": "after_forget",
+      "input": "我喜欢喝什么？如果没有我的记录，请直接说明不知道。",
+      "reply": "目前没有可用的、已确认的你的饮品偏好记录，所以我不知道你喜欢喝什么。",
+      "model": "qwen3:4b",
+      "question_subject": "owner",
+      "answer_basis": "no_confirmed_memory",
+      "used_memory_ids": []
+    },
+    {
+      "step": "assistant_preference",
+      "input": "你喜欢喝什么？",
+      "reply": "我没有真实的饮品偏好。你的个人偏好与 Fairy 的角色设定是分开记录的。",
+      "model": "qwen3:4b",
+      "question_subject": "assistant",
+      "answer_basis": "assistant_identity",
+      "used_memory_ids": []
+    }
+  ],
+  "local_invocations": 5,
+  "cloud_live_tested": false
+}

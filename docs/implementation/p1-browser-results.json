@@ -1,0 +1,29 @@
+{
+  "status": "passed",
+  "provider": "real local Ollama",
+  "model": "qwen3:4b",
+  "checks": [
+    "native Ollama discovery",
+    "model profile save",
+    "write-only credential redaction",
+    "real conversation",
+    "pending proposal not recalled",
+    "source inspection",
+    "review approval",
+    "versioned correction",
+    "real corrected answer",
+    "live SSE update from another client",
+    "390px no horizontal overflow",
+    "forget current and historical memory",
+    "no browser runtime errors"
+  ],
+  "synthetic_data": true,
+  "cloud_requests": 0,
+  "screenshots": [
+    "chat-desktop.png",
+    "correction-desktop.png",
+    "memory-mobile-web.png",
+    "models-desktop.png",
+    "review-desktop.png"
+  ]
+}

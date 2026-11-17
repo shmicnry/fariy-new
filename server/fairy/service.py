@@ -56,6 +56,8 @@ class Service:
                         "status": record.status,
                         "revision": record.revision,
                     }
+                if record and record.kind in ("memory", "memory_proposal"):
+                    return view(record)
             return {k: self.resolve_cached(s, v) for k, v in result.items()}
         return result
 
@@ -129,7 +131,12 @@ class Service:
                 candidates.append(
                     (
                         self.get(s, memory["id"]),
-                        {"kind": "quoted_memory", "text": memory["text"]},
+                        {
+                            "kind": "quoted_memory",
+                            "id": memory["id"],
+                            "text": memory["text"],
+                            "source_ids": memory["source_ids"],
+                        },
                     )
                 )
             for turn in self.rows(s, "turn")[-6:]:
@@ -140,6 +147,7 @@ class Service:
                             turn,
                             {
                                 "kind": "recent_dialogue",
+                                "source_ids": d.get("source_ids", []),
                                 "user": d["text"],
                                 "assistant": d.get("reply", ""),
                             },
@@ -186,46 +194,45 @@ class Service:
 
     def invalidate(self, id, revision):
         with self.db.tx() as s:
-            r = self.get(s, id)
-            if r.revision != revision:
-                fail(409, "revision_conflict")
-            r.status = "deleted"
-            r.revision += 1
-            # Explicit erasure of content; downstream proposals cannot read a retained hidden copy.
-            r.payload = json.dumps({"deleted_at": now()})
-            invalid = {id}
-            while True:
-                added = set()
-                for child in s.scalars(
-                    select(Record).where(Record.scope == "owner")
-                ).all():
-                    data = json.loads(child.payload)
-                    if child.status not in ("deleted", "invalidated") and (
-                        set(data.get("source_ids", [])) & invalid
-                    ):
-                        child.status = "invalidated"
-                        child.revision += 1
-                        child.payload = json.dumps({"invalidated_by": id})
-                        added.add(child.id)
-                if not added:
-                    break
-                invalid |= added
-            for cached in s.scalars(
-                select(Request).where(Request.scope == "owner")
-            ).all():
-                cached.result = json.dumps(
-                    self.resolve_cached(s, json.loads(cached.result))
-                )
-            self.db.emit(s, "owner", "sources.invalidated", {"ids": sorted(invalid)})
-            return {
-                "deleted": id,
-                "affected": sorted(invalid),
-                "provider_and_backup_erasure": False,
-            }
+            return self._invalidate(s, id, revision)
 
-    def start_turn(self, text, key):
+    def _invalidate(self, s, id, revision):
+        r = self.get(s, id)
+        if r.revision != revision:
+            fail(409, "revision_conflict")
+        r.status = "deleted"
+        r.revision += 1
+        # Explicit erasure of content; downstream proposals cannot read a retained hidden copy.
+        r.payload = json.dumps({"deleted_at": now()})
+        invalid = {id}
+        while True:
+            added = set()
+            for child in s.scalars(select(Record).where(Record.scope == "owner")).all():
+                data = json.loads(child.payload)
+                if child.status not in ("deleted", "invalidated") and (
+                    set(data.get("source_ids", [])) & invalid
+                ):
+                    child.status = "invalidated"
+                    child.revision += 1
+                    child.payload = json.dumps({"invalidated_by": id})
+                    added.add(child.id)
+            if not added:
+                break
+            invalid |= added
+        for cached in s.scalars(select(Request).where(Request.scope == "owner")).all():
+            cached.result = json.dumps(
+                self.resolve_cached(s, json.loads(cached.result))
+            )
+        self.db.emit(s, "owner", "sources.invalidated", {"ids": sorted(invalid)})
+        return {
+            "deleted": id,
+            "affected": sorted(invalid),
+            "provider_and_backup_erasure": False,
+        }
+
+    def start_turn(self, text, key, routing="auto"):
         with self.db.tx() as s:
-            body = {"text": text}
+            body = {"text": text, "routing": routing}
             cached = self.replay(s, key, body)
             if cached is not None:
                 return dict(cached, _replayed=True)
@@ -246,6 +253,7 @@ class Service:
                     "evidence_id": ev.id,
                     "source_ids": [ev.id],
                     "generation": 1,
+                    "routing": routing,
                 },
                 "pending",
             )
@@ -256,7 +264,9 @@ class Service:
             self.remember_result(s, key, body, result)
             return result
 
-    def finish_turn(self, id, text=None, error=None, snapshot=None):
+    def finish_turn(
+        self, id, text=None, error=None, snapshot=None, metadata=None, proposals=None
+    ):
         with self.db.tx() as s:
             r = self.get(s, id, "turn")
             if r.status != "pending":
@@ -276,6 +286,30 @@ class Service:
             )
             r.status = "failed" if error else "completed"
             data.update(reply=text, error=error)
+            if metadata:
+                data["model_route"] = metadata
+            if not error:
+                data["memory_proposal_ids"] = self._commit_memory_proposals(
+                    s, r, proposals or []
+                )
+                text = self.ground_memory_reply(
+                    text, data["memory_proposal_ids"], data.get("text", "")
+                )
+                data["reply"] = text
+                data["memory_receipt"] = {
+                    "status": (
+                        "pending_review"
+                        if data["memory_proposal_ids"]
+                        else "not_written"
+                    ),
+                    "long_term_memory_written": False,
+                }
+                self.db.emit(
+                    s,
+                    "owner",
+                    "memory.receipt",
+                    {"turn_id": id, **data["memory_receipt"]},
+                )
             r.payload = json.dumps(data)
             r.revision += 1
             if not error:
@@ -300,6 +334,12 @@ class Service:
                 {"turn_id": id, "action_executed": False},
             )
             return view(r)
+
+    def _commit_memory_proposals(self, s, turn, candidates):
+        return []
+
+    def ground_memory_reply(self, text, proposal_ids, user_text=""):
+        return text
 
     def cancel(self, id):
         with self.db.tx() as s:

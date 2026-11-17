@@ -291,14 +291,26 @@ def test_approval_digest_and_expiry(app, client):
 def test_provider_context_and_success(tmp_path, monkeypatch):
     import httpx
 
-    monkeypatch.setenv("FAIRY_MODEL_BASE_URL", "https://model.test/v1")
-    monkeypatch.setenv("FAIRY_MODEL_NAME", "fixture")
+    monkeypatch.setenv("FAIRY_OLLAMA_MODEL", "fixture")
     seen = []
 
     def handler(req):
         seen.append(json.loads(req.content))
         return httpx.Response(
-            200, json={"choices": [{"message": {"content": "我记得你喜欢茶。"}}]}
+            200,
+            json={
+                "done": True,
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "reply": "我记得你喜欢茶。",
+                            "outcome": "answered",
+                            "escalation_reason": "none",
+                            "memories": [],
+                        }
+                    )
+                },
+            },
         )
 
     app = create_app(
