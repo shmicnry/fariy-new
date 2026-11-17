@@ -46,6 +46,14 @@ class LearningService(Service):
             fail(422, "invalid_text_file")
         # No file names or file content become executable paths or instructions.
         result = self.material(filename, text, key)
+        with self.db.tx() as s:
+            course = self.get(s, result["course"]["id"], "course")
+            d = json.loads(course.payload)
+            if course.status == "active" and not d.get("practice_required"):
+                d["practice_required"] = True
+                course.payload = json.dumps(d)
+                course.revision += 1
+            result["course"] = view(course)
         return dict(
             result,
             file_sha256=hashlib.sha256(raw).hexdigest(),

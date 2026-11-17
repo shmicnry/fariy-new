@@ -97,6 +97,39 @@ class MemoryService(Service):
                 for e in context["entries"]
                 if e["kind"] == "quoted_memory" and e.get("subject") == target
             ]
+        if not target:
+            from .knowledge import KnowledgeService
+            from .cognition import relevance
+
+            with self.db.sessions() as s:
+                for claim in KnowledgeService(self.db).world():
+                    if (
+                        not claim["source_eligible"]
+                        or relevance(
+                            query,
+                            claim["subject"] + claim["predicate"] + claim["value"],
+                        )
+                        < 0.25
+                    ):
+                        continue
+                    if len(context["entries"]) >= 20:
+                        break
+                    source = self.get(s, claim["source_ids"][0])
+                    context["entries"].append(
+                        {
+                            "kind": "world_claim",
+                            "subject": claim["subject"],
+                            "predicate": claim["predicate"],
+                            "value": claim["value"],
+                            "quote": claim["quote"],
+                            "verification": claim["verification"],
+                            "source_quality": claim["source_quality"],
+                            "conflicts_with": claim["conflicts_with"],
+                            "source_ids": claim["source_ids"],
+                        }
+                    )
+                    snapshot[claim["id"]] = claim["revision"]
+                    snapshot[source.id] = source.revision
         snapshot[policy_id] = policy_revision
         return context, snapshot
 
@@ -132,7 +165,9 @@ class MemoryService(Service):
 
     def _create_proposal(self, s, text, source_id, category="fact"):
         source = self.get(s, source_id)
-        if source.kind not in ("evidence", "material") or source.status != "active":
+        if source.kind not in ("evidence", "material") or not self.source_eligible(
+            source
+        ):
             fail(422, "invalid_source")
         if not text.strip() or text not in json.loads(source.payload).get("text", ""):
             fail(422, "exact_source_quote_required")
@@ -219,7 +254,7 @@ class MemoryService(Service):
                 fail(422, "invalid_decision")
             for source_id in d["source_ids"]:
                 source = self.get(s, source_id)
-                if source.status != "active" or d["text"] not in json.loads(
+                if not self.source_eligible(source) or d["text"] not in json.loads(
                     source.payload
                 ).get("text", ""):
                     fail(409, "source_invalidated")
@@ -284,10 +319,10 @@ class MemoryService(Service):
                 fail(422, "evidence_required")
             for id in sources:
                 source = self.get(s, id)
-                if (
-                    source.kind not in ("evidence", "material")
-                    or source.status != "active"
-                ):
+                if source.kind not in (
+                    "evidence",
+                    "material",
+                ) or not self.source_eligible(source):
                     fail(422, "invalid_source")
                 if text not in json.loads(source.payload).get("text", ""):
                     fail(422, "exact_source_quote_required")

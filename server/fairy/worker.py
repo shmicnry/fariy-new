@@ -24,8 +24,8 @@ def tick(db):
                 job.status = "cancelled"
                 continue
             sources = [service.get(s, x) for x in d["source_ids"]]
-            if any(x.status != "active" for x in sources):
-                job.status = "cancelled"
+            if any(not service.source_eligible(x) for x in sources):
+                job.status = "blocked"
                 continue
             c = json.loads(course.payload)
             from .learning import chunks

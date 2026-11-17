@@ -1,5 +1,7 @@
 # Fairy · fariy-new
 
+最新P2：[学习、来源与世界知识闭环](docs/implementation/P2学习与世界知识.md)。新增链接登记、来源复核、带出处的知识主张、练习评分和效果记录；真实公网采集在当前DNS环境下受阻，详见限制。
+
 最新进展：[P1可靠性收尾与P2文件学习启动](docs/implementation/P1收尾与P2启动.md)。学习中心现支持TXT/Markdown文件、带位置的阅读分块、断点续读和带出处的练习；数据库新增版本迁移与备份恢复命令。
 
 Fairy 0.2 实现 **Ollama 本地主模型 + 可配置云副模型 + 可审阅、可纠正的记忆闭环**。沿用原始 Fairy v4.2 设计，工程按可验证的阶段推进。
@@ -76,7 +78,7 @@ python scripts/export_contract.py
 python scripts/acceptance_ollama.py
 ```
 
-本次 **62 项回归通过**，真实 Ollama 和真实浏览器闭环通过。报告与截图：
+P1 基线 **62 项回归通过**；最新P2回归为87项通过、1项Postgres环境测试跳过，详见顶部最新记录。P1阶段，真实 Ollama 和真实浏览器闭环通过。报告与截图：
 
 - [P1 实施与验证记录](docs/implementation/P1-模型与记忆闭环.md)
 - [Ollama 实测结果](docs/implementation/p1-ollama-acceptance.json)
@@ -85,7 +87,7 @@ python scripts/acceptance_ollama.py
 
 云端请求预留在调用日志中，每个回合的每个阶段只派发一次。失败和超时也计入每日次数，超时费用为未知，不自动重试。重启时过期请求标记为结果未知；未过期的 pending 可以在对话或识海页中断。每日次数上限不是金额硬上限。
 
-GitHub Actions 已配置。前次云端 runner 受账号账单/支出限制，未能启动；本机验证独立完成。`compose.yaml` 是已有 Postgres/API/worker 模板，本轮未运行容器验收。Ollama 回环连接目前按宿主进程部署，容器不能把其自身的 `127.0.0.1` 当作宿主 Mac。数据库迁移、Postgres 并发与容器网络仍需专项验收。
+GitHub Actions 已配置。前次云端 runner 受账号账单/支出限制，未能启动；本机验证独立完成。`compose.yaml` 是已有 Postgres/API/worker 模板，本轮未运行容器验收；Postgres在P1收尾时已通过独立实例回归。Ollama 回环连接目前按宿主进程部署，容器不能把其自身的 `127.0.0.1` 当作宿主 Mac。数据库迁移、Postgres 并发与容器网络仍需专项验收。
 
 ## 工程与资料
 

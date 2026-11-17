@@ -56,7 +56,11 @@ class Service:
                         "status": record.status,
                         "revision": record.revision,
                     }
-                if record and record.kind in ("memory", "memory_proposal"):
+                if record and record.kind in (
+                    "memory",
+                    "memory_proposal",
+                    "link_import",
+                ):
                     return view(record)
             return {k: self.resolve_cached(s, v) for k, v in result.items()}
         return result
@@ -92,6 +96,15 @@ class Service:
             self.remember_result(s, key, body, result)
             return result
 
+    def source_eligible(self, r):
+        if not r or r.status not in ("active", "completed"):
+            return False
+        quality = json.loads(r.payload).get("quality", {})
+        if quality.get("rating") in ("disputed", "rejected"):
+            return False
+        expiry = quality.get("expires_at")
+        return not expiry or datetime.fromisoformat(expiry) > datetime.now(timezone.utc)
+
     def recall(self, query, principal="confirmed"):
         if principal != "confirmed":
             return {"results": [], "reason": "private_recall_denied", "degraded": False}
@@ -103,7 +116,8 @@ class Service:
                 data = json.loads(r.payload)
                 refs = [s.get(Record, id) for id in data["source_ids"]]
                 if not refs or any(
-                    not x or x.scope != "owner" or x.status != "active" for x in refs
+                    not x or x.scope != "owner" or not self.source_eligible(x)
+                    for x in refs
                 ):
                     continue
                 score = relevance(query, data["text"])
@@ -157,7 +171,7 @@ class Service:
                 data = json.loads(row.payload)
                 ids = [row.id] + data.get("source_ids", [])
                 refs = [s.get(Record, id) for id in ids]
-                if any(not x or x.status not in ("active", "completed") for x in refs):
+                if any(not self.source_eligible(x) for x in refs):
                     continue
                 encoded = json.dumps(entry, ensure_ascii=False)
                 if used + len(encoded) > 12000:
@@ -276,7 +290,7 @@ class Service:
                 source = s.get(Record, source_id)
                 if (
                     not source
-                    or source.status not in ("active", "completed")
+                    or not self.source_eligible(source)
                     or source.revision != revision
                 ):
                     error = "context_snapshot_invalidated"
@@ -468,8 +482,21 @@ class Service:
                 fail(409, "course_not_ready")
             if not evidence.strip():
                 fail(422, "assessment_evidence_required")
-            if any(self.get(s, x).status != "active" for x in d["source_ids"]):
+            if any(not self.source_eligible(self.get(s, x)) for x in d["source_ids"]):
                 fail(409, "source_invalidated")
+            if passed and d.get("practice_required"):
+                reviewed = [
+                    x
+                    for x in self.rows(s, "practice")
+                    if x.status == "active"
+                    and json.loads(x.payload).get("course_id") == id
+                    and json.loads(x.payload).get("evaluation") != "ungraded"
+                ]
+                if (
+                    not reviewed
+                    or json.loads(reviewed[-1].payload).get("evaluation") != "passed"
+                ):
+                    fail(409, "reviewed_practice_required")
             d.update(
                 stage="completed" if passed else "needs_practice",
                 mastered=passed,

@@ -1,4 +1,7 @@
 import {
+    renderKnowledge
+} from './knowledge.js';
+import {
     renderModels,
     renderMemories,
     renderConversation,
@@ -123,6 +126,7 @@ async function render() {
         button,
         refresh: render
     };
+    if (route === 'world') return renderKnowledge(ui);
     if (route === 'models') return renderModels(ui);
     if (route === 'memories') {
         document.querySelector('nav a[href="#memories"]').textContent = names.memories;
@@ -171,6 +175,9 @@ async function render() {
             await render()
         }));
         p.append(el('p', '当前支持文字；视频、音乐、URL 抓取尚未接入。运行 worker 后进入人工验证，不自动宣称掌握。', 'muted'));
+        const sourceLink = el('a', '投喂网页与复核来源');
+        sourceLink.href = '#world';
+        p.append(sourceLink);
         const uploadPanel = panel('学习文件与来源检索');
         const file = el('input');
         file.type = 'file';
@@ -226,6 +233,33 @@ async function render() {
                     practiceList.replaceChildren();
                     for (const item of await api('learning/courses/' + course.id + '/practice')) practiceList.append(el('p', item.answer), el('blockquote', item.evidence_quote), el('small', '未自动评分，需人工核对'))
                 }), practiceList);
+                const evaluation = el('div');
+                cp.append(button('评定练习与查看效果', async () => {
+                    evaluation.replaceChildren();
+                    const report = await api('learning/courses/' + course.id + '/effect');
+                    evaluation.append(el('p', '已提交 ' + report.attempts + ' 次，已复核 ' + report.reviewed_attempts + ' 次；最近分数 ' + (report.latest_score ?? '暂无') + ' / 5（人工量表，不代表通用能力）'));
+                    for (const item of await api('learning/courses/' + course.id + '/practice')) {
+                        const box = el('div', undefined, 'memory-row');
+                        box.append(el('p', item.answer), el('blockquote', item.evidence_quote));
+                        const score = el('input');
+                        score.type = 'number';
+                        score.min = 0;
+                        score.max = 5;
+                        score.value = item.score ?? 0;
+                        score.setAttribute('aria-label', '练习评分');
+                        const feedback = el('input');
+                        feedback.placeholder = '评定理由与不足';
+                        box.append(score, feedback, button('保存练习评定', async () => {
+                            await api('learning/practice/' + item.id, 'PATCH', {
+                                revision: item.revision,
+                                score: Number(score.value),
+                                feedback: feedback.value
+                            });
+                            await render()
+                        }));
+                        evaluation.append(box)
+                    }
+                }), evaluation);
                 const proof = el('textarea');
                 proof.placeholder = '记录你用于验证的练习及实际结果';
                 cp.append(proof, button('记录通过', async () => {

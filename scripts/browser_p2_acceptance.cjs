@@ -63,11 +63,61 @@ const assert = require('node:assert/strict');
         exact: true
     }).click();
     await page.getByText(/原文位置 0/).waitFor();
+    await page.locator('nav a[href="#world"]').click();
+    await page.getByLabel('来源标签 植物知识.md').selectOption('primary');
+    await page.getByLabel('复核理由 植物知识.md').fill('人工核对了材料出处');
+    await page.getByRole('button', {
+        name: '保存来源复核',
+        exact: true
+    }).click();
+    const materials = await (await fetch((process.env.FAIRY_TEST_URL || 'http://127.0.0.1:18844') + '/v2/learning/sources', {
+        headers: {
+            Authorization: 'Bearer ' + process.env.FAIRY_TOKEN
+        }
+    })).json();
+    await page.getByLabel('实体或主题').fill('植物');
+    await page.getByLabel('属性或关系').fill('需求');
+    await page.getByLabel('主张内容').fill('阳光和水分');
+    await page.getByLabel('引用材料 ID').fill(materials[0].id);
+    await page.getByLabel('逐字原文依据').fill('植物需要阳光和水分。');
+    await page.getByRole('button', {
+        name: '登记知识主张',
+        exact: true
+    }).click();
+    await page.getByRole('heading', {
+        name: '植物 / 需求',
+        exact: true
+    }).waitFor();
+    await page.locator('nav a[href="#learning"]').click();
+    await page.getByRole('button', {
+        name: '评定练习与查看效果',
+        exact: true
+    }).click();
+    await page.getByLabel('练习评分').fill('4');
+    await page.getByPlaceholder('评定理由与不足').fill('内容与原文一致，迁移能力未测试');
+    await page.getByRole('button', {
+        name: '保存练习评定',
+        exact: true
+    }).click();
+    await page.getByRole('button', {
+        name: '评定练习与查看效果',
+        exact: true
+    }).click();
+    await page.getByText(/最近分数 4/).waitFor();
+    await page.getByPlaceholder('记录你用于验证的练习及实际结果').fill('已人工核对练习及来源');
+    await page.getByRole('button', {
+        name: '记录通过',
+        exact: true
+    }).click();
+    await page.getByRole('button', {
+        name: '归纳为习得知识',
+        exact: true
+    }).waitFor();
     assert.deepEqual(errors, []);
     assert.equal(await page.locator('#error').innerText(), '');
     fs.writeFileSync('docs/implementation/p2-browser-results.json', JSON.stringify({
         status: 'passed',
-        checks: ['file upload', 'worker', 'practice with citation', 'source search', 'no runtime errors'],
+        checks: ['file upload', 'worker', 'practice with citation', 'source search', 'no runtime errors', 'source review', 'world claim with quote', 'practice rubric grade', 'course completion gate'],
         synthetic_data: true
     }, null, 2) + '\n');
     await browser.close();

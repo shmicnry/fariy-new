@@ -16,6 +16,8 @@ from .memories import MemoryService
 from .model_settings import ModelSettings, ModelConfig
 from .models import ModelRouter
 from .learning import LearningService
+from .knowledge import KnowledgeService
+from .link_fetch import fetch_text, validate_url
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -65,6 +67,32 @@ class Practice(Strict):
     revision: int = Field(ge=1)
     answer: str = Field(min_length=1, max_length=8000)
     evidence: str = Field(min_length=1, max_length=4000)
+
+
+class LinkInput(Strict):
+    url: str = Field(min_length=1, max_length=2000)
+    title: str = Field(min_length=1, max_length=160)
+
+
+class SourceReview(Strict):
+    revision: int = Field(ge=1)
+    rating: Literal["unreviewed", "primary", "corroborated", "disputed", "rejected"]
+    reason: str = Field(min_length=1, max_length=2000)
+    expires_at: str | None = None
+
+
+class WorldClaim(Strict):
+    subject: str = Field(min_length=1, max_length=160)
+    predicate: str = Field(min_length=1, max_length=160)
+    value: str = Field(min_length=1, max_length=2000)
+    source_id: str = Field(min_length=1, max_length=100)
+    quote: str = Field(min_length=1, max_length=4000)
+
+
+class PracticeGrade(Strict):
+    revision: int = Field(ge=1)
+    score: int = Field(ge=0, le=5)
+    feedback: str = Field(min_length=1, max_length=2000)
 
 
 class Card(Text):
@@ -281,6 +309,44 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     def delete(id: str, revision: int = Query(ge=1)):
         return service.invalidate(id, revision)
 
+    @api.post("/learning/links")
+    async def import_link(body: LinkInput, k=Depends(key)):
+        try:
+            validate_url(body.url)
+        except ValueError:
+            fail(422, "public_https_url_required")
+        return await asyncio.to_thread(
+            KnowledgeService(db).link, body.url, body.title, k, fetch_text
+        )
+
+    @api.get("/learning/links")
+    def links():
+        return service.list("link_import")
+
+    @api.get("/learning/sources")
+    def sources():
+        return service.list("material")
+
+    @api.patch("/learning/sources/{id}")
+    def source_review(id: str, body: SourceReview):
+        return KnowledgeService(db).source_review(
+            id, body.revision, body.rating, body.reason, body.expires_at
+        )
+
+    @api.post("/world/claims")
+    def claim(body: WorldClaim, k=Depends(key)):
+        return KnowledgeService(db).claim(
+            body.subject, body.predicate, body.value, body.source_id, body.quote, k
+        )
+
+    @api.get("/world/claims")
+    def world():
+        return KnowledgeService(db).world()
+
+    @api.patch("/learning/practice/{id}")
+    def grade(id: str, body: PracticeGrade):
+        return KnowledgeService(db).grade(id, body.revision, body.score, body.feedback)
+
     @api.post("/learning/materials")
     def material(body: Material, k=Depends(key)):
         return service.material(body.title, body.text, k)
@@ -320,7 +386,10 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
                 if row.status != "active":
                     continue
                 d = json.loads(row.payload)
-                if any(service.get(s, id).status != "active" for id in d["source_ids"]):
+                if any(
+                    not service.source_eligible(service.get(s, id))
+                    for id in d["source_ids"]
+                ):
                     continue
                 score = relevance(q, d["text"])
                 if score > 0:
@@ -328,6 +397,27 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
         return {
             "results": sorted(results, key=lambda r: (-r["relevance"], r["id"]))[:20],
             "retrieval_mode": "lexical_chunks",
+        }
+
+    @api.get("/learning/courses/{id}/effect")
+    def learning_effect(id: str):
+        with db.sessions() as s:
+            service.get(s, id, "course")
+        all_rows = [r for r in service.list("practice") if r["course_id"] == id]
+        graded = sorted(
+            [r for r in all_rows if r["evaluation"] != "ungraded"],
+            key=lambda r: r["reviewed_at"],
+        )
+        return {
+            "attempts": len(all_rows),
+            "reviewed_attempts": len(graded),
+            "latest_score": graded[-1]["score"] if graded else None,
+            "initial_score": graded[0]["score"] if graded else None,
+            "score_change": (
+                graded[-1]["score"] - graded[0]["score"] if graded else None
+            ),
+            "method": "owner_rubric",
+            "generalization_verified": False,
         }
 
     @api.get("/learning/courses")

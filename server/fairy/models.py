@@ -166,7 +166,7 @@ class ModelRouter:
                 r = s.get(Record, id)
                 if (
                     not r
-                    or r.status not in ("active", "completed")
+                    or not self.service.source_eligible(r)
                     or r.revision != revision
                 ):
                     raise ModelError("context_snapshot_invalidated")
