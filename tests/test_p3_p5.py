@@ -387,7 +387,7 @@ def test_pwa_shell_is_served_and_does_not_cache_api(env):
     assert worker.status_code == 200
     assert worker.headers["service-worker-allowed"] == "/"
     assert "url.pathname.startsWith('/v2/')" in worker.text
-    assert "fairy-shell-v6" in worker.text
+    assert "fairy-shell-v7" in worker.text
 
 
 def test_lan_hosts_require_explicit_allowlist(env, monkeypatch):

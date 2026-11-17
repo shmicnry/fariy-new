@@ -108,6 +108,8 @@ P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境�
 - [P1 运行截图](docs/implementation/screenshots/p1/)
 - [P3–P5 纵切记录](docs/implementation/P3-P5-纵切交付与验证.md)
 - [P3–P5 浏览器结果](docs/implementation/p3-p5-browser-results.json)
+- [UI 控件审查与优化](docs/implementation/UI控件审查与优化.md)
+- [UI 控件浏览器审计结果](docs/implementation/ui-audit-browser-results.json)
 - [P3 Mac 页面截图](docs/implementation/screenshots/p3-mac-desktop.png)
 - [P5 自主与进化截图](docs/implementation/screenshots/p5-autonomy-desktop.png)
 - [iPhone PWA 截图](docs/implementation/screenshots/p4-iphone-layout.png)

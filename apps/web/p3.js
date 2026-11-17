@@ -1,5 +1,5 @@
 export async function renderSkills(ui) {
-    const {el, api, panel, button} = ui;
+    const {el, api, panel, button, controlLabel} = ui;
     const acquired = panel('习得知识');
     const learned = await api('skills');
     if (!learned.length) acquired.append(el('p', '还没有完成验证的习得知识。', 'muted'));
@@ -16,7 +16,7 @@ export async function renderSkills(ui) {
         row.append(
             el('h3', skill.name),
             el('p', skill.purpose),
-            el('small', skill.version + ' · ' + skill.permissions.join('、'))
+            el('small', skill.version + ' · ' + skill.permissions.join('、'), 'skill-meta')
         );
         if (!skill.installed) {
             row.append(button('安装并检查', async () => {
@@ -29,11 +29,9 @@ export async function renderSkills(ui) {
             expiry.min = 1;
             expiry.max = 1440;
             expiry.value = 60;
-            expiry.setAttribute('aria-label', '技能授权分钟数');
+            row.append(el('p', '已安装，尚未授权。', 'route-note'));
+            controlLabel('授权分钟数', expiry, row, '授权到期后自动失效。');
             row.append(
-                el('p', '已安装，尚未授权。', 'route-note'),
-                el('label', '授权分钟数', 'field'),
-                expiry,
                 button('确认授权并启用', async () => {
                     await api('skills/registry/' + skill.id + '/grant', 'POST', {
                         revision: skill.revision,
@@ -52,9 +50,18 @@ export async function renderSkills(ui) {
                     : '此技能无需输入';
             input.setAttribute('aria-label', '技能调用参数');
             const output = el('pre', '', 'skill-output');
+            const needsInput = ['learning_search', 'mac_open_app'].includes(skill.implementation);
             row.append(
-                el('p', '已启用，授权到期后自动失效。', 'muted'),
-                input,
+                el('p', '已启用，授权到期后自动失效。', 'muted')
+            );
+            if (needsInput) {
+                controlLabel(
+                    skill.implementation === 'mac_open_app' ? '允许应用' : '检索关键词',
+                    input,
+                    row
+                );
+            }
+            row.append(
                 button(skill.implementation === 'mac_open_app' ? '执行允许应用启动' : '只读执行一次', async () => {
                     const result = await api('skills/registry/' + skill.id + '/invoke', 'POST', {
                         query: input.value,
@@ -74,7 +81,7 @@ export async function renderSkills(ui) {
 }
 
 export async function renderMac(ui) {
-    const {el, api, panel, button} = ui;
+    const {el, api, panel, button, controlLabel} = ui;
     const status = await api('mac/status');
     const statusPanel = panel('这台 Mac · 只读状态');
     statusPanel.append(
@@ -96,10 +103,10 @@ export async function renderMac(ui) {
 
     const filePanel = panel('允许目录浏览');
     const pathInput = el('input');
-    pathInput.placeholder = '允许目录的绝对路径';
-    pathInput.setAttribute('aria-label', 'Mac 目录路径');
     const fileOutput = el('div');
-    filePanel.append(el('p', '只能浏览配置中的允许目录；符号链接越界会拒绝。', 'muted'), pathInput, button('读取目录', async () => {
+    filePanel.append(el('p', '只能浏览配置中的允许目录；符号链接越界会拒绝。', 'muted'));
+    controlLabel('允许目录的绝对路径', pathInput, filePanel);
+    filePanel.append(button('读取目录', async () => {
         const result = await api('mac/files?path=' + encodeURIComponent(pathInput.value));
         fileOutput.replaceChildren(el('p', result.path, 'muted'));
         for (const item of result.entries) {
@@ -116,18 +123,15 @@ export async function renderMac(ui) {
     const scope = panel('设备范围预配置');
     const appInput = el('textarea');
     appInput.value = (config.mac_allowed_apps || []).join('\n');
-    appInput.placeholder = '应用 Bundle ID 或应用名称，每行一个';
-    appInput.setAttribute('aria-label', '允许应用');
     const pathConfig = el('textarea');
     pathConfig.value = (config.mac_allowed_paths || []).join('\n');
-    pathConfig.placeholder = '允许读取的目录绝对路径，每行一个';
-    pathConfig.setAttribute('aria-label', '允许目录');
     const execute = el('input');
     execute.type = 'checkbox';
     execute.checked = Boolean(config.mac_execute);
     execute.setAttribute('aria-label', '允许启动允许列表应用');
     const lines = input => input.value.split('\n').map(value => value.trim()).filter(Boolean);
-    scope.append(el('label', '允许应用', 'field'), appInput, el('label', '允许目录', 'field'), pathConfig);
+    controlLabel('允许应用', appInput, scope, '应用 Bundle ID 或应用名称，每行一个。');
+    controlLabel('允许目录', pathConfig, scope, '允许读取的目录绝对路径，每行一个。');
     const executeLabel = el('label', undefined, 'check');
     executeLabel.append(execute, el('span', '允许技能启动允许列表中的应用'));
     scope.append(

@@ -86,6 +86,7 @@ export async function renderModels(ui) {
     const url = field(ui, local, 'Ollama 地址', cfg.ollama_base_url);
     const name = field(ui, local, '本地模型名称', cfg.ollama_model);
     const installed = ui.el('div');
+    installed.className = 'model-list';
     local.append(ui.button('检测本机模型', async () => {
         const result = await ui.api('models/ollama');
         installed.replaceChildren();

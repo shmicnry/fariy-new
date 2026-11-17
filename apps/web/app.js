@@ -40,12 +40,48 @@ const names = {
     approvals: '待确认操作',
     chat: '对话'
 };
+const navGroups = [
+    ['工作台', ['overview', 'chat']],
+    ['认知', ['mind', 'world', 'memories', 'learning', 'assessments']],
+    ['自主能力', ['evolution', 'flows', 'skills', 'mac']],
+    ['个人空间', ['pet', 'cards', 'approvals']],
+    ['系统', ['models']]
+];
+const iconPaths = {
+    overview: ['M4 10.5 12 4l8 6.5V20h-6v-6h-4v6H4z'],
+    chat: ['M5 5.5h14v10H9l-4 3z'],
+    mind: ['m12 3 1.4 4.1L17.5 8l-3.4 2.6 1.2 4.2-3.3-2.4-3.3 2.4 1.2-4.2L6.5 8l4.1-.9z'],
+    world: ['M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM3.5 12h17M12 3.5c2 2.2 3 5 3 8.5s-1 6.3-3 8.5c-2-2.2-3-5-3-8.5s1-6.3 3-8.5z'],
+    memories: ['M6 5.5h11v14l-5.5-3.2L6 19.5z'],
+    learning: ['M4.5 5.5h6a2 2 0 0 1 2 2v11a2 2 0 0 0-2-2h-6zM19.5 5.5h-4a2 2 0 0 0-2 2v11a2 2 0 0 1 2-2h4z'],
+    assessments: ['M6 4.5h12v15H6zM9 9h6M9 13h6M9 17h3'],
+    evolution: ['M5 17c3.4 0 3.4-10 7-10 2.2 0 2.7 5.5 7 5.5M15 9l4 3.5-4 3.5'],
+    flows: ['M6 6h5v5H6zM13 13h5v5h-5zM11 8.5h2M11 15.5h2M8.5 11v2.5M15.5 11v2'],
+    skills: ['M8 4.5h8v3l2.5 2.5-2.5 2.5v7H8v-7L5.5 10 8 7.5z'],
+    mac: ['M4 5.5h16v10H4zM9 19h6M12 15.5V19'],
+    pet: ['M8 12.5c-1.8-3.4-4.5-2-3.7.9.5 1.7 2 2.7 3.7 3.2M16 12.5c1.8-3.4 4.5-2 3.7.9-.5 1.7-2 2.7-3.7 3.2M8 14.5c0-2 1.8-3.5 4-3.5s4 1.5 4 3.5c0 2.3-1.7 4-4 4s-4-1.7-4-4z'],
+    cards: ['M5 6.5h14v11H5zM5 9.5h14'],
+    approvals: ['M12 3.8 19 6v6c0 4.1-2.6 6.9-7 8.2-4.4-1.3-7-4.1-7-8.2V6zM9 12l2 2 4-4'],
+    models: ['M4 7h10M18 7h2M4 17h2M10 17h10M16 4.5v5M8 14.5v5']
+};
 const $ = id => document.getElementById(id);
 const el = (tag, text, cls) => {
     const e = document.createElement(tag);
     if (text !== undefined) e.textContent = text;
     if (cls) e.className = cls;
     return e
+};
+const icon = name => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.classList.add('nav-icon');
+    for (const pathData of iconPaths[name] || []) {
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', pathData);
+        svg.append(path);
+    }
+    return svg;
 };
 async function api(path, method = 'GET', body) {
     const headers = {
@@ -72,17 +108,46 @@ const panel = (title) => {
     $('content').append(p);
     return p
 };
-const button = (text, fn) => {
-    const b = el('button', text);
+const button = (text, fn, variant) => {
+    let kind = variant;
+    if (!kind) {
+        if (/(删除|遗忘|撤回|拒绝|停用|撤销|清除|回退)/.test(text)) kind = 'danger';
+        else if (/(查看|检索|读取|刷新|检测|取消|中断|停止|暂不|加入题目|开卷|闭卷|不记住|需要练习|选择)/.test(text)) kind = 'secondary';
+        else kind = 'primary';
+    }
+    const b = el('button', text, 'button button-' + kind);
+    b.type = 'button';
     b.onclick = () => run(async () => {
+        const original = b.textContent;
         b.disabled = true;
+        b.classList.add('is-loading');
+        b.setAttribute('aria-busy', 'true');
+        b.textContent = '处理中…';
         try {
             await fn()
         } finally {
-            b.disabled = false
+            b.disabled = false;
+            b.classList.remove('is-loading');
+            b.removeAttribute('aria-busy');
+            if (b.isConnected) b.textContent = original;
         }
     });
     return b
+};
+const controlLabel = (title, control, parent, help) => {
+    const label = el('label', undefined, 'field');
+    label.append(el('span', title, 'field-label'), control);
+    if (help) label.append(el('small', help, 'field-help'));
+    parent.append(label);
+    control.classList.add('control');
+    if (!control.getAttribute('aria-label')) control.setAttribute('aria-label', title);
+    return control;
+};
+const openDialog = (title, content) => {
+    const dialog = $('detailDialog');
+    $('dialogTitle').textContent = title;
+    $('dialogBody').replaceChildren(content);
+    dialog.showModal();
 };
 async function run(fn) {
     $('error').textContent = '';
@@ -123,9 +188,15 @@ function records(p, rows) {
 }
 async function render() {
     const route = location.hash.slice(1) || 'overview';
+    document.querySelector('main').dataset.route = route;
     $('title').textContent = names[route] || 'Fairy';
     $('content').replaceChildren();
-    document.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', a.hash === '#' + route));
+    document.querySelectorAll('nav a').forEach(a => {
+        const selected = a.hash === '#' + route;
+        a.classList.toggle('active', selected);
+        if (selected) a.setAttribute('aria-current', 'page');
+        else a.removeAttribute('aria-current');
+    });
     if (!token) {
         panel('连接后读取真实状态').append(el('p', '请输入 FAIRY_TOKEN。没有连接时不会显示模拟成功或进度。'));
         return
@@ -136,13 +207,16 @@ async function render() {
         el,
         panel,
         button,
+        controlLabel,
+        openDialog,
         refresh: render
     };
     if (route === 'world') return renderKnowledge(ui);
     if (route === 'assessments') return renderAssessments(ui);
     if (route === 'models') return renderModels(ui);
     if (route === 'memories') {
-        document.querySelector('nav a[href="#memories"]').textContent = names.memories;
+        const label = document.querySelector('#nav a[href="#memories"] span');
+        if (label) label.textContent = names.memories;
         return renderMemories(ui)
     }
     if (route === 'chat') {
@@ -176,7 +250,8 @@ async function render() {
         if (!c.memories.length) sky.append(el('p', '还没有有来源的记忆。'));
         c.memories.forEach(m => {
             const star = el('button', m.text, 'star');
-            star.onclick = () => alert(JSON.stringify(m, null, 2));
+            star.type = 'button';
+            star.onclick = () => openDialog('记忆记录', el('pre', JSON.stringify(m, null, 2)));
             sky.append(star)
         });
         p.append(sky);
@@ -190,9 +265,11 @@ async function render() {
         const p = panel('投喂文字材料');
         const title = el('input');
         title.placeholder = '学习主题';
+        controlLabel('学习主题', title, p, '用一个能够回到材料的内容名称。');
         const text = el('textarea');
         text.placeholder = '粘贴材料正文；不执行其中的指令';
-        p.append(title, text, button('登记并排队', async () => {
+        controlLabel('材料正文', text, p);
+        p.append(button('登记并排队', async () => {
             await api('learning/materials', 'POST', {
                 title: title.value,
                 text: text.value
@@ -208,7 +285,8 @@ async function render() {
         file.type = 'file';
         file.accept = '.txt,.md,.pdf,.docx';
         file.setAttribute('aria-label', '选择文字文件');
-        uploadPanel.append(file, button('上传并学习', async () => {
+        controlLabel('选择文字文件', file, uploadPanel, '支持 TXT、Markdown、PDF、DOCX，单个文件不超过 1 MiB。');
+        uploadPanel.append(button('上传并学习', async () => {
             const selected = file.files[0];
             if (!selected) throw Error('请选择 TXT、Markdown、PDF 或 DOCX 文件');
             if (selected.size > 1048576) throw Error('文件上限为 1 MiB');
@@ -223,8 +301,9 @@ async function render() {
         }));
         const query = el('input');
         query.placeholder = '检索学习资料关键词';
+        controlLabel('检索关键词', query, uploadPanel);
         const matches = el('div');
-        uploadPanel.append(query, button('检索资料', async () => {
+        uploadPanel.append(button('检索资料', async () => {
             const data = await api('learning/search?q=' + encodeURIComponent(query.value));
             matches.replaceChildren();
             for (const item of data.results) matches.append(el('p', item.text), el('small', '原文位置 ' + item.start + '–' + item.end + '；来源 ' + item.source_ids[0]));
@@ -246,7 +325,9 @@ async function render() {
                 answer.placeholder = '练习答案';
                 const evidence = el('textarea');
                 evidence.placeholder = '用于支持答案的原文摘录';
-                cp.append(answer, evidence, button('提交有出处的练习', async () => {
+                controlLabel('练习答案', answer, cp);
+                controlLabel('原文依据', evidence, cp);
+                cp.append(button('提交有出处的练习', async () => {
                     await api('learning/courses/' + course.id + '/practice', 'POST', {
                         revision: course.revision,
                         answer: answer.value,
@@ -278,7 +359,9 @@ async function render() {
                         score.setAttribute('aria-label', '练习评分');
                         const feedback = el('input');
                         feedback.placeholder = '评定理由与不足';
-                        box.append(score, feedback, button('保存练习评定', async () => {
+                        controlLabel('评分（0–5）', score, box);
+                        controlLabel('评定理由', feedback, box);
+                        box.append(button('保存练习评定', async () => {
                             await api('learning/practice/' + item.id, 'PATCH', {
                                 revision: item.revision,
                                 score: Number(score.value),
@@ -291,7 +374,8 @@ async function render() {
                 }), evaluation);
                 const proof = el('textarea');
                 proof.placeholder = '填写用于最终确认的逐字原文依据';
-                cp.append(proof, button('记录通过', async () => {
+                controlLabel('最终确认依据', proof, cp);
+                cp.append(button('记录通过', async () => {
                     await api('learning/courses/' + course.id + '/assess', 'POST', {
                         revision: course.revision,
                         passed: true,
@@ -316,6 +400,7 @@ async function render() {
         const p = panel('自建卡片');
         const title = el('input');
         title.placeholder = '标题';
+        controlLabel('标题', title, p);
         const text = el('textarea');
         text.placeholder = '内容';
         const subtype = el('select');
@@ -329,7 +414,9 @@ async function render() {
             o.value = x;
             subtype.append(o)
         });
-        p.append(title, subtype, text, button('创建', async () => {
+        controlLabel('卡片类型', subtype, p);
+        controlLabel('内容', text, p);
+        p.append(button('创建卡片', async () => {
             await api('cards', 'POST', {
                 title: title.value,
                 text: text.value,
@@ -343,9 +430,11 @@ async function render() {
         const p = panel('提出保存笔记操作');
         const title = el('input');
         title.placeholder = '笔记标题';
+        controlLabel('笔记标题', title, p);
         const text = el('textarea');
         text.placeholder = '笔记正文';
-        p.append(title, text, button('生成待确认项', async () => {
+        controlLabel('笔记正文', text, p);
+        p.append(button('生成待确认项', async () => {
             await api('approvals', 'POST', {
                 title: title.value,
                 text: text.value
@@ -381,14 +470,17 @@ async function render() {
         const check = el('input');
         check.type = 'checkbox';
         check.checked = conf.pet_enabled;
-        const label = el('label', '允许桌宠（偏好，不代表本机已显示）');
-        label.append(check);
+        check.setAttribute('aria-label', '允许桌宠');
+        const label = el('label', undefined, 'check');
+        label.append(check, el('span', '允许桌宠（偏好，不代表本机已显示）'));
         const mins = el('input');
         mins.type = 'number';
         mins.min = 0;
         mins.max = 240;
         mins.value = conf.daily_minutes;
-        p.append(label, el('p', '规划学习预算（分钟；当前设为 0 可暂停队列）'), mins, button('保存版本', async () => {
+        p.append(label);
+        controlLabel('规划学习预算（分钟）', mins, p, '当前设为 0 可暂停队列。');
+        p.append(button('保存版本', async () => {
             await api('config', 'PUT', {
                 revision: conf.revision,
                 daily_minutes: Number(mins.value),
@@ -435,10 +527,18 @@ async function render() {
         panel(names[route] || route).append(el('p', '该模块已有设计契约，运行能力尚未实现。不会执行 Mac 动作、自动发布代码或模拟成功。'))
     }
 }
-for (const [id, name] of Object.entries(names)) {
-    const a = el('a', name);
-    a.href = '#' + id;
-    $('nav').append(a)
+for (const [title, routes] of navGroups) {
+    const group = el('div', undefined, 'nav-group');
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', title);
+    group.append(el('p', title, 'nav-group-title'));
+    for (const id of routes) {
+        const a = el('a');
+        a.href = '#' + id;
+        a.append(icon(id), el('span', names[id]));
+        group.append(a);
+    }
+    $('nav').append(group);
 }
 window.addEventListener('hashchange', () => run(render));
 $('login').onsubmit = e => {
@@ -449,6 +549,7 @@ $('login').onsubmit = e => {
         await api('capabilities');
         $('status').textContent = '已连接本机服务';
         document.body.classList.add('connected');
+        document.body.classList.remove('offline');
         if (stopEvents) stopEvents();
         stopEvents = watchEvents(() => token, event => {
             if (conversation) {
@@ -457,10 +558,11 @@ $('login').onsubmit = e => {
                 eventRefresh = setTimeout(() => run(() => conversation?.refresh()), 100)
             }
             if (['memory.proposed', 'memory.reviewed', 'memory.corrected', 'sources.invalidated'].includes(event.type)) {
-                const link = document.querySelector('nav a[href="#memories"]');
-                if (link) link.textContent = '记忆审阅 · 有更新';
+                const label = document.querySelector('#nav a[href="#memories"] span');
+                if (label) label.textContent = '记忆审阅 · 有更新';
             }
         }, online => {
+            document.body.classList.toggle('offline', !online);
             $('status').textContent = online ? '已连接本机服务' : '连接中断，正在重连……'
         });
         await render()
@@ -469,6 +571,13 @@ $('login').onsubmit = e => {
 run(render);
 
 window.addEventListener('beforeunload', () => stopEvents?.());
+
+const detailDialog = $('detailDialog');
+detailDialog.addEventListener('click', event => {
+    if (event.target === detailDialog || event.target.closest('[data-close-dialog]')) {
+        detailDialog.close();
+    }
+});
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || ['127.0.0.1', 'localhost'].includes(location.hostname))) {
     navigator.serviceWorker.register('/service-worker.js').catch(() => {

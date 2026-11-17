@@ -12,7 +12,7 @@ const evolutionSample = {
 };
 
 export async function renderAutonomy(ui) {
-    const {el, api, panel, button} = ui;
+    const {el, api, panel, button, controlLabel} = ui;
     const configs = await api('config');
     const config = configs[0] || {
         revision: 0, daily_minutes: 45, pet_enabled: false,
@@ -45,10 +45,10 @@ export async function renderAutonomy(ui) {
     };
     const enabledLabel = el('label', undefined, 'check');
     enabledLabel.append(enabled, el('span', '启用受预算约束的自主候选'));
+    autonomy.append(enabledLabel);
+    controlLabel('每日自主时长（分钟）', minutes, autonomy);
+    controlLabel('每日候选数量', items, autonomy);
     autonomy.append(
-        enabledLabel,
-        el('label', '每日分钟', 'field'), minutes,
-        el('label', '每日候选数', 'field'), items,
         button('保存自主预算', async () => {
             await api('config', 'PUT', {
                 revision: config.revision,
@@ -103,8 +103,8 @@ export async function renderAutonomy(ui) {
     lab.append(el('p', '固定用例由所有者提供，候选输出只在记录中比较。评分器不可被候选修改，实验通过也不会自动部署运行版本。', 'muted'));
     const experimentInput = el('textarea');
     experimentInput.value = JSON.stringify(evolutionSample, null, 2);
-    experimentInput.setAttribute('aria-label', '进化实验 JSON');
-    lab.append(experimentInput, button('运行隔离评测', async () => {
+    controlLabel('实验用例与候选输出（JSON）', experimentInput, lab, '固定输入只用于隔离比较，不会自动改动运行版本。');
+    lab.append(button('运行隔离评测', async () => {
         let body;
         try {
             body = JSON.parse(experimentInput.value);

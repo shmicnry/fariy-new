@@ -37,12 +37,36 @@
     <p id="error" role="alert"></p>
   </main>
   <nav id="mobileTabs" class="mobile-tabs" aria-label="iPhone 导航">
-    <a href="#overview"><span>◉</span>运行</a>
-    <a href="#chat"><span>◌</span>对话</a>
-    <a href="#memories"><span>✦</span>记忆</a>
-    <a href="#learning"><span>▤</span>学习</a>
-    <a href="#evolution"><span>⌁</span>自主</a>
+    <a href="#overview">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20h-6v-6h-4v6H4z"/></svg>
+      <span>运行</span>
+    </a>
+    <a href="#chat">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3z"/></svg>
+      <span>对话</span>
+    </a>
+    <a href="#memories">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 14.1 10l5.9.3-4.6 3.7 1.4 5.8-4.8-3.4-5 3.4 1.5-5.8L4 10.3l6-.3z"/></svg>
+      <span>记忆</span>
+    </a>
+    <a href="#learning">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5h6a2 2 0 0 1 2 2v11a2 2 0 0 0-2-2h-6zM19.5 5.5h-4a2 2 0 0 0-2 2v11a2 2 0 0 1 2-2h4z"/></svg>
+      <span>学习</span>
+    </a>
+    <a href="#evolution">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17c3.4 0 3.4-10 7-10 2.2 0 2.7 5.5 7 5.5M15 9l4 3.5-4 3.5"/></svg>
+      <span>自主</span>
+    </a>
   </nav>
+  <dialog id="detailDialog" class="detail-dialog" aria-labelledby="dialogTitle">
+    <div class="dialog-surface">
+      <div class="dialog-header">
+        <h2 id="dialogTitle">记录详情</h2>
+        <button class="icon-button" type="button" aria-label="关闭详情" data-close-dialog>×</button>
+      </div>
+      <div id="dialogBody" class="dialog-body"></div>
+    </div>
+  </dialog>
   <script type="module" src="/assets/app.js"></script>
 </body>
 </html>
