@@ -230,33 +230,40 @@ export async function renderMemories(ui) {
                 history.append(h)
             }
         }), history);
-        const edit = ui.el('details');
-        edit.append(ui.el('summary', '纠正这条记忆'));
-        const text = field(ui, edit, '纠正后的内容', m.text, 'textarea');
-        const reason = field(ui, edit, '纠正原因', '');
-        const subject = choice(ui, edit, '纠正后的主体', [
-            ['owner', '我（用户）'],
-            ['assistant', 'Fairy（助手）'],
-            ['other', '其他人物'],
-            ['unspecified', '主体尚未明确']
-        ], m.subject || 'unspecified');
-        edit.append(ui.button('保存纠正', async () => {
-            await ui.api('memories/' + m.id, 'PATCH', {
-                revision: m.revision,
-                text: text.value,
-                reason: reason.value,
-                subject: subject.value
+        row.append(ui.button('纠正记忆', () => {
+            const editor = ui.el('div');
+            const text = field(ui, editor, '纠正后的内容', m.text, 'textarea');
+            const reason = field(ui, editor, '纠正原因', '');
+            const subject = choice(ui, editor, '纠正后的主体', [
+                ['owner', '我（用户）'],
+                ['assistant', 'Fairy（助手）'],
+                ['other', '其他人物'],
+                ['unspecified', '主体尚未明确']
+            ], m.subject || 'unspecified');
+            editor.append(ui.button('保存纠正', async () => {
+                await ui.api('memories/' + m.id, 'PATCH', {
+                    revision: m.revision,
+                    text: text.value,
+                    reason: reason.value,
+                    subject: subject.value
+                });
+                ui.closeDialog();
+                await ui.refresh()
+            }));
+            ui.openDialog('纠正记忆', editor, {
+                variant: 'drawer',
+                dismissOnBackdrop: false
             });
-            await ui.refresh()
         }));
-        row.append(edit);
-        const forget = ui.el('details');
-        forget.append(ui.el('summary', '遗忘这条记忆'));
-        forget.append(ui.el('p', '清除当前记忆及其版本记录，并屏蔽相关旧来源进入后续回答。原始材料仍可单独查看。', 'muted'), ui.button('确认遗忘这条记忆', async () => {
-            await ui.api('memories/' + m.id + '?revision=' + m.revision, 'DELETE');
-            await ui.refresh()
-        }));
-        row.append(forget);
+        row.append(ui.confirmButton(
+            '遗忘这条记忆',
+            '遗忘记忆',
+            '清除当前记忆及其版本记录，并阻止相关旧来源进入后续回答。原始材料仍可单独查看。',
+            async () => {
+                await ui.api('memories/' + m.id + '?revision=' + m.revision, 'DELETE');
+                await ui.refresh()
+            }
+        ));
         list.append(row)
     }
     const search = ui.panel('检索当前记忆');
@@ -458,6 +465,7 @@ export async function renderConversation(ui) {
             });
             text.value = '';
             progress.textContent = r.error ? explain(r.error) : (r.memory_proposal_ids?.length ? '回答已返回，有 ' + r.memory_proposal_ids.length + ' 条记忆提案等待审阅。' : '回答已返回。');
+            followLatest = true;
             await refresh()
         } finally {
             inFlight = false;
@@ -466,13 +474,43 @@ export async function renderConversation(ui) {
         }
     });
     p.append(send);
+    text.addEventListener('keydown', event => {
+        if (
+            event.key === 'Enter'
+            && !event.shiftKey
+            && !event.isComposing
+            && event.keyCode !== 229
+        ) {
+            event.preventDefault();
+            send.click();
+        }
+    });
     const history = ui.panel('对话记录');
-    const output = ui.el('div');
-    history.append(output);
+    history.classList.add('conversation-panel');
+    const toolbar = ui.el('div', undefined, 'conversation-toolbar');
+    const jumpLatest = ui.el('button', '跳到最新', 'button button-secondary');
+    jumpLatest.type = 'button';
+    jumpLatest.hidden = true;
+    toolbar.append(jumpLatest);
+    const output = ui.el('div', undefined, 'conversation-scroll');
+    history.append(toolbar, output);
+    let followLatest = true;
+    const updateFollowState = () => {
+        const distance = output.scrollHeight - output.scrollTop - output.clientHeight;
+        followLatest = distance < 48;
+        jumpLatest.hidden = followLatest;
+    };
+    output.addEventListener('scroll', updateFollowState, {passive: true});
+    jumpLatest.onclick = () => {
+        followLatest = true;
+        output.scrollTo({top: output.scrollHeight, behavior: 'smooth'});
+        jumpLatest.hidden = true;
+    };
     async function refresh() {
         const turns = await ui.api('turns');
         latestTurns = turns;
         if (!output.isConnected) return;
+        const previousTop = output.scrollTop;
         output.replaceChildren();
         if (!turns.length) output.append(ui.el('p', '从一条消息开始。', 'muted'));
         for (const t of turns.slice(-30)) {
@@ -496,6 +534,15 @@ export async function renderConversation(ui) {
             }));
             output.append(article)
         }
+        requestAnimationFrame(() => {
+            if (followLatest) {
+                output.scrollTop = output.scrollHeight;
+                jumpLatest.hidden = true;
+            } else {
+                output.scrollTop = previousTop;
+                jumpLatest.hidden = false;
+            }
+        });
     }
     await refresh();
     return {

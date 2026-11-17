@@ -95,6 +95,10 @@ const assert = require('node:assert/strict');
         name: '撤回这条主张',
         exact: true
     }).click();
+    await page.getByRole('dialog').getByRole('button', {
+        name: '撤回这条主张',
+        exact: true
+    }).click();
     await page.getByRole('heading', {
         name: '植物 / 需求',
         exact: true
@@ -127,11 +131,12 @@ const assert = require('node:assert/strict');
         exact: true
     }).waitFor();
     await page.locator('#nav a[href="#world"]').click();
-    await page.getByText('删除这份来源', {
+    await page.getByRole('button', {
+        name: '删除这份来源',
         exact: true
     }).click();
-    await page.getByRole('button', {
-        name: '确认删除来源',
+    await page.getByRole('dialog').getByRole('button', {
+        name: '删除这份来源',
         exact: true
     }).click();
     const skills = await (await fetch((process.env.FAIRY_TEST_URL || 'http://127.0.0.1:18844') + '/v2/skills', {

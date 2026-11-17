@@ -116,7 +116,18 @@ async function api(path, method = 'GET', body) {
 }
 const panel = (title) => {
     const p = el('section', undefined, 'panel');
-    p.append(el('h2', title));
+    const heading = el('h2');
+    const value = String(title);
+    const dot = value.lastIndexOf('.');
+    if (dot > 0 && value.length > 42) {
+        const extension = value.slice(dot);
+        const stemBudget = Math.max(12, 39 - extension.length);
+        heading.textContent = value.slice(0, stemBudget).trimEnd() + '…' + extension;
+        heading.title = value;
+    } else {
+        heading.textContent = value;
+    }
+    p.append(heading);
     $('content').append(p);
     return p
 };
@@ -136,7 +147,10 @@ const button = (text, fn, variant) => {
         b.setAttribute('aria-busy', 'true');
         b.textContent = '处理中…';
         try {
-            await fn()
+            await fn();
+            if (!/(查看|检索|读取|检测|查询|刷新|打开|选择|停止|中断)/.test(text)) {
+                showToast(text + '已完成');
+            }
         } finally {
             b.disabled = false;
             b.classList.remove('is-loading');
@@ -155,11 +169,51 @@ const controlLabel = (title, control, parent, help) => {
     if (!control.getAttribute('aria-label')) control.setAttribute('aria-label', title);
     return control;
 };
-const openDialog = (title, content) => {
+const openDialog = (title, content, options = {}) => {
     const dialog = $('detailDialog');
+    const variant = options.variant || 'modal';
+    dialog.dataset.variant = variant;
+    dialog.dataset.backdropDismiss = options.dismissOnBackdrop === false ? 'false' : 'true';
+    dialog.classList.toggle('detail-drawer', variant === 'drawer');
+    dialog.classList.toggle('confirm-dialog', variant === 'confirm');
     $('dialogTitle').textContent = title;
     $('dialogBody').replaceChildren(content);
     if (!dialog.open) dialog.showModal();
+};
+const closeDialog = () => {
+    const dialog = $('detailDialog');
+    if (dialog.open) dialog.close();
+};
+const showToast = (message, tone = 'success') => {
+    const toast = el('div', message, `toast toast-${tone}`);
+    toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+    $('toastRegion').append(toast);
+    requestAnimationFrame(() => toast.classList.add('visible'));
+    setTimeout(() => {
+        toast.classList.remove('visible');
+        setTimeout(() => toast.remove(), 180);
+    }, 2300);
+};
+const confirmButton = (label, title, message, fn, variant = 'danger') => {
+    const trigger = el('button', label, `button button-${variant}`);
+    trigger.type = 'button';
+    trigger.onclick = () => {
+        const body = el('div', undefined, 'confirm-content');
+        body.append(el('p', message));
+        const actions = el('div', undefined, 'button-row dialog-actions');
+        const cancel = el('button', '取消', 'button button-secondary');
+        cancel.type = 'button';
+        cancel.onclick = () => $('detailDialog').close();
+        const confirm = button(label, async () => {
+            await fn();
+            $('detailDialog').close();
+        }, variant);
+        actions.append(cancel, confirm);
+        body.append(actions);
+        openDialog(title, body, {variant: 'confirm', dismissOnBackdrop: false});
+        cancel.focus();
+    };
+    return trigger;
 };
 const notificationStorageKey = 'fairy.notifications.v1';
 const eventCursorKey = 'fairy.event-cursor.v1';
@@ -278,7 +332,7 @@ function showNotificationCenter() {
         };
         body.append(row);
     }
-    openDialog('通知中心', body);
+    openDialog('通知中心', body, {variant: 'drawer'});
 }
 function showSyncNotice(event, meta) {
     pendingUpdates += 1;
@@ -320,6 +374,11 @@ async function run(fn) {
     } catch (e) {
         $('error').textContent = e.message
     }
+}
+async function renderPreservingScroll() {
+    const previous = window.scrollY;
+    await render();
+    requestAnimationFrame(() => window.scrollTo({top: previous, behavior: 'instant'}));
 }
 const statuses = {
     active: '已保存',
@@ -379,9 +438,11 @@ async function render() {
         el,
         panel,
         button,
+        confirmButton,
         controlLabel,
         openDialog,
-        refresh: render
+        closeDialog,
+        refresh: renderPreservingScroll
     };
     if (route === 'world') return renderKnowledge(ui);
     if (route === 'assessments') return renderAssessments(ui);
@@ -427,7 +488,11 @@ async function render() {
         c.memories.forEach(m => {
             const star = el('button', m.text, 'star');
             star.type = 'button';
-            star.onclick = () => openDialog('记忆记录', el('pre', JSON.stringify(m, null, 2)));
+            star.onclick = () => openDialog(
+                '记忆记录',
+                el('pre', JSON.stringify(m, null, 2)),
+                {variant: 'drawer'}
+            );
             sky.append(star)
         });
         p.append(sky);
@@ -758,7 +823,7 @@ $('login').onsubmit = e => {
                 if (routeDirty || document.activeElement?.closest('#content input, #content textarea, #content select')) {
                     showSyncNotice(event, meta);
                 } else {
-                    eventRefresh = setTimeout(() => run(render), 180);
+                    eventRefresh = setTimeout(() => run(renderPreservingScroll), 180);
                 }
             }
         }, online => {
@@ -780,15 +845,75 @@ $('content').addEventListener('input', () => {
 $('content').addEventListener('change', () => {
     routeDirty = true;
 });
-$('syncRefresh').onclick = () => run(render);
+$('syncRefresh').onclick = () => run(renderPreservingScroll);
 $('notificationButton').onclick = () => {
     showNotificationCenter();
 };
 
 const detailDialog = $('detailDialog');
 detailDialog.addEventListener('click', event => {
-    if (event.target === detailDialog || event.target.closest('[data-close-dialog]')) {
+    if (event.target.closest('[data-close-dialog]')) {
         detailDialog.close();
+    } else if (event.target === detailDialog && detailDialog.dataset.backdropDismiss !== 'false') {
+        detailDialog.close();
+    }
+});
+
+const sidebarResizer = $('sidebarResizer');
+const sidebarMinimum = 208;
+const sidebarMaximum = 360;
+const defaultSidebarWidth = 238;
+let sidebarWidth = Math.min(
+    sidebarMaximum,
+    Math.max(
+        sidebarMinimum,
+        Number(localStorage.getItem('fairy.sidebar-width') || defaultSidebarWidth)
+    )
+);
+const setSidebarWidth = (value, persist = false) => {
+    sidebarWidth = Math.round(Math.min(sidebarMaximum, Math.max(sidebarMinimum, value)));
+    document.documentElement.style.setProperty('--sidebar-width', sidebarWidth + 'px');
+    sidebarResizer.setAttribute('aria-valuemin', String(sidebarMinimum));
+    sidebarResizer.setAttribute('aria-valuemax', String(sidebarMaximum));
+    sidebarResizer.setAttribute('aria-valuenow', String(sidebarWidth));
+    if (persist) localStorage.setItem('fairy.sidebar-width', String(sidebarWidth));
+};
+setSidebarWidth(sidebarWidth);
+sidebarResizer.addEventListener('pointerdown', event => {
+    if (matchMedia('(max-width: 780px)').matches) return;
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    sidebarResizer.setPointerCapture(event.pointerId);
+    document.body.classList.add('resizing-sidebar');
+    const move = moveEvent => setSidebarWidth(startWidth + moveEvent.clientX - startX);
+    const stop = () => {
+        document.body.classList.remove('resizing-sidebar');
+        sidebarResizer.removeEventListener('pointermove', move);
+        sidebarResizer.removeEventListener('pointerup', stop);
+        sidebarResizer.removeEventListener('pointercancel', stop);
+        setSidebarWidth(sidebarWidth, true);
+    };
+    sidebarResizer.addEventListener('pointermove', move);
+    sidebarResizer.addEventListener('pointerup', stop);
+    sidebarResizer.addEventListener('pointercancel', stop);
+});
+sidebarResizer.addEventListener('dblclick', () => setSidebarWidth(defaultSidebarWidth, true));
+sidebarResizer.addEventListener('keydown', event => {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        setSidebarWidth(
+            sidebarWidth + (event.key === 'ArrowRight' ? 16 : -16),
+            true
+        );
+    } else if (event.key === 'Home') {
+        event.preventDefault();
+        setSidebarWidth(sidebarMinimum, true);
+    } else if (event.key === 'End') {
+        event.preventDefault();
+        setSidebarWidth(sidebarMaximum, true);
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        setSidebarWidth(defaultSidebarWidth, true);
     }
 });
 

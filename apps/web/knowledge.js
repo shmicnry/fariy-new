@@ -3,7 +3,8 @@ export async function renderKnowledge(ui) {
         el,
         api,
         panel,
-        button
+        button,
+        confirmButton
     } = ui;
     const field = (p, label) => {
         const l = el('label', label, 'field'),
@@ -56,16 +57,15 @@ export async function renderKnowledge(ui) {
             });
             await ui.refresh()
         }));
-        const removal = el('details');
-        removal.append(
-            el('summary', '删除这份来源'),
-            el('p', '删除会使引用它的课程、练习、测验结果、知识主张和对话派生内容失效。', 'muted'),
-            button('确认删除来源', async () => {
+        box.append(confirmButton(
+            '删除这份来源',
+            '删除来源',
+            '引用它的课程、练习、测验结果、知识主张和对话派生内容会同时失效。',
+            async () => {
                 await api('records/' + r.id + '?revision=' + r.revision, 'DELETE');
                 await ui.refresh()
-            })
-        );
-        box.append(removal);
+            }
+        ));
         sources.append(box)
     }
     const world = panel('世界知识与争议');
@@ -92,10 +92,15 @@ export async function renderKnowledge(ui) {
             el('p', c.value),
             el('blockquote', c.quote),
             el('small', (c.source_eligible ? '来源当前有效' : '来源当前不参与检索') + '；有不同主张 ' + c.conflicts_with.length + ' 条'),
-            button('撤回这条主张', async () => {
-                await api('records/' + c.id + '?revision=' + c.revision, 'DELETE');
-                await ui.refresh()
-            })
+            confirmButton(
+                '撤回这条主张',
+                '撤回知识主张',
+                '这条带出处的知识主张会退出当前知识与冲突判断。',
+                async () => {
+                    await api('records/' + c.id + '?revision=' + c.revision, 'DELETE');
+                    await ui.refresh()
+                }
+            )
         );
         world.append(card)
     }

@@ -1,5 +1,5 @@
 export async function renderSkills(ui) {
-    const {el, api, panel, button, controlLabel} = ui;
+    const {el, api, panel, button, controlLabel, confirmButton} = ui;
     const acquired = panel('习得知识');
     const learned = await api('skills');
     if (!learned.length) acquired.append(el('p', '还没有完成验证的习得知识。', 'muted'));
@@ -10,14 +10,24 @@ export async function renderSkills(ui) {
     }
 
     const registry = panel('可执行技能');
-    registry.append(el('p', '安装、授权、启用和执行是四个独立步骤。当前只开放只读内置技能，不存在任意 shell 或输入注入。', 'muted'));
+    const lifecycle = el('div', undefined, 'lifecycle-legend');
+    for (const [index, label] of ['安装', '授权', '启用', '执行'].entries()) {
+        const step = el('span', label);
+        step.dataset.step = String(index + 1);
+        lifecycle.append(step);
+    }
+    registry.append(lifecycle);
     for (const skill of await api('skills/registry')) {
         const row = el('article', undefined, 'memory-row skill-card');
+        const stage = !skill.installed ? 1 : !skill.enabled ? 2 : 4;
+        const state = !skill.installed ? '未安装' : !skill.enabled ? '待授权' : '可执行';
         row.append(
             el('h3', skill.name),
             el('p', skill.purpose),
+            el('span', state, 'tag skill-state'),
             el('small', skill.version + ' · ' + skill.permissions.join('、'), 'skill-meta')
         );
+        row.dataset.stage = String(stage);
         if (!skill.installed) {
             row.append(button('安装并检查', async () => {
                 await api('skills/registry/' + skill.id + '/install', 'POST', {});
@@ -76,10 +86,15 @@ export async function renderSkills(ui) {
                     });
                     output.textContent = JSON.stringify(result.result, null, 2);
                 }),
-                button('停用并撤销授权', async () => {
-                    await api('skills/registry/' + skill.id + '/disable', 'POST', {});
-                    await ui.refresh()
-                }),
+                confirmButton(
+                    '停用并撤销授权',
+                    '停用技能',
+                    '该技能当前的限时授权会立即撤销。',
+                    async () => {
+                        await api('skills/registry/' + skill.id + '/disable', 'POST', {});
+                        await ui.refresh()
+                    }
+                ),
                 output
             );
         }

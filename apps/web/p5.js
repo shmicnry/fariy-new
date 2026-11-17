@@ -12,7 +12,7 @@ const evolutionSample = {
 };
 
 export async function renderAutonomy(ui) {
-    const {el, api, panel, button, controlLabel} = ui;
+    const {el, api, panel, button, controlLabel, confirmButton} = ui;
     const configs = await api('config');
     const config = configs[0] || {
         revision: 0, daily_minutes: 45, pet_enabled: false,
@@ -38,10 +38,41 @@ export async function renderAutonomy(ui) {
     items.max = 100;
     items.value = config.autonomy_daily_items;
     items.setAttribute('aria-label', '每日自主候选数');
-    const budgetOutput = el('p', '', 'muted');
+    const metrics = el('div', undefined, 'metric-grid');
+    const minuteMetric = el('article', undefined, 'metric');
+    const minuteValue = el('strong', '0 / 0');
+    const minuteProgress = el('progress');
+    minuteMetric.append(el('span', '今日时长', 'metric-label'), minuteValue, minuteProgress);
+    const itemMetric = el('article', undefined, 'metric');
+    const itemValue = el('strong', '0 / 0');
+    const itemProgress = el('progress');
+    itemMetric.append(el('span', '自主候选', 'metric-label'), itemValue, itemProgress);
+    metrics.append(minuteMetric, itemMetric);
+    const animateValue = (element, target, suffix) => {
+        const from = Number(element.dataset.value || 0);
+        element.dataset.value = String(target);
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            element.textContent = target + suffix;
+            return;
+        }
+        const started = performance.now();
+        const duration = 260;
+        const frame = now => {
+            const progress = Math.min(1, (now - started) / duration);
+            const eased = 1 - (1 - progress) ** 3;
+            element.textContent = Math.round(from + (target - from) * eased) + suffix;
+            if (progress < 1) requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+    };
     const refreshBudget = async () => {
         const budget = await api('autonomy/budget');
-        budgetOutput.textContent = '今日已用 ' + budget.used_minutes + ' / ' + budget.daily_minutes + ' 分钟，候选 ' + budget.used_items + ' / ' + budget.daily_items;
+        animateValue(minuteValue, budget.used_minutes, ' / ' + budget.daily_minutes);
+        animateValue(itemValue, budget.used_items, ' / ' + budget.daily_items);
+        minuteProgress.max = Math.max(1, budget.daily_minutes);
+        minuteProgress.value = budget.used_minutes;
+        itemProgress.max = Math.max(1, budget.daily_items);
+        itemProgress.value = budget.used_items;
     };
     const enabledLabel = el('label', undefined, 'check');
     enabledLabel.append(enabled, el('span', '启用受预算约束的自主候选'));
@@ -64,7 +95,7 @@ export async function renderAutonomy(ui) {
             });
             await ui.refresh();
         }),
-        budgetOutput
+        metrics
     );
     await refreshBudget();
 
@@ -131,10 +162,16 @@ export async function renderAutonomy(ui) {
             }));
         }
         if (experiment.status !== 'rolled_back') {
-            row.append(button('回退实验记录', async () => {
-                await api('evolution/experiments/' + experiment.id + '/rollback', 'POST', {});
-                await ui.refresh();
-            }));
+            row.append(confirmButton(
+                '回退实验记录',
+                '回退进化实验',
+                '实验记录会标记为已回退；运行版本不会发生改变。',
+                async () => {
+                    await api('evolution/experiments/' + experiment.id + '/rollback', 'POST', {});
+                    await ui.refresh();
+                },
+                'secondary'
+            ));
         }
         lab.append(row);
     }

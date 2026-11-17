@@ -7,7 +7,8 @@ export async function renderAssessments(ui) {
         el,
         api,
         panel,
-        button
+        button,
+        confirmButton
     } = ui;
     const make = (p, label, type = 'input') => {
         const l = el('label', label, 'field'),
@@ -94,16 +95,15 @@ export async function renderAssessments(ui) {
             if (r.status === 'failed') throw Error('作答失败：' + explain(r.error));
             await ui.refresh()
         }));
-        const removal = el('details');
-        removal.append(
-            el('summary', '撤回这份测验'),
-            el('p', '撤回后不能再发起新的作答；已有关联记录会被标记失效。', 'muted'),
-            button('确认撤回测验', async () => {
+        row.append(confirmButton(
+            '撤回这份测验',
+            '撤回固定测验',
+            '撤回后不能再发起新的作答，已有关联记录会被标记失效。',
+            async () => {
                 await api('records/' + q.id + '?revision=' + q.revision, 'DELETE');
                 await ui.refresh()
-            })
-        );
-        row.append(removal);
+            }
+        ));
         quizzes.append(row)
     }
     const results = panel('测验结果');

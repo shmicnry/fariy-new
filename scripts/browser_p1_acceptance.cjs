@@ -116,10 +116,12 @@ const assert = require('node:assert/strict');
         name: '确认记住',
         exact: true
     }).first().click();
-    await page.getByText('纠正这条记忆', {
+    await page.getByRole('button', {
+        name: '纠正记忆',
         exact: true
     }).waitFor();
-    await page.getByText('纠正这条记忆', {
+    await page.getByRole('button', {
+        name: '纠正记忆',
         exact: true
     }).click();
     await page.getByLabel('纠正后的内容').fill('我现在喜欢喝温水。');
@@ -184,11 +186,12 @@ const assert = require('node:assert/strict');
         fullPage: true
     });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-    await page.getByText('遗忘这条记忆', {
+    await page.getByRole('button', {
+        name: '遗忘这条记忆',
         exact: true
     }).click();
-    await page.getByRole('button', {
-        name: '确认遗忘这条记忆',
+    await page.getByRole('dialog').getByRole('button', {
+        name: '遗忘这条记忆',
         exact: true
     }).click();
     await page.getByText('还没有已确认记忆。待审阅的内容不会在这里显示。', {

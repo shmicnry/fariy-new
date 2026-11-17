@@ -506,7 +506,7 @@ def test_pwa_shell_is_served_and_does_not_cache_api(env):
     assert worker.status_code == 200
     assert worker.headers["service-worker-allowed"] == "/"
     assert "url.pathname.startsWith('/v2/')" in worker.text
-    assert "fairy-shell-v8" in worker.text
+    assert "fairy-shell-v10" in worker.text
 
 
 def test_local_voice_status_and_tts(env, monkeypatch):

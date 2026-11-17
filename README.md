@@ -1,5 +1,7 @@
 # Fairy · fariy-new
 
+最新设计规范：[Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)，对应本地 Skill：`$fairy-ui-design`。
+
 最新阶段：[P3–P5 可运行纵切交付与验证](docs/implementation/P3-P5-纵切交付与验证.md)。新增技能生命周期、受限 Mac 桥、iPhone PWA、SwiftUI 双平台页面、自主候选预算与隔离进化实验。
 
 最新审计：[P2缺漏审计与修复](docs/implementation/P2审计修复.md)。修复文件幂等、学习结论撤销、精确最终依据、来源失效、测验取消和撤回入口等问题；最终在隔离 Postgres 16 上 **108 项回归全部通过**。
@@ -137,6 +139,9 @@ P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境�
 - [P3–P5 纵切记录](docs/implementation/P3-P5-纵切交付与验证.md)
 - [P3–P5 浏览器结果](docs/implementation/p3-p5-browser-results.json)
 - [UI 控件审查与优化](docs/implementation/UI控件审查与优化.md)
+- [Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)
+- [fairy-ui-design Skill](.agents/skills/fairy-ui-design/SKILL.md)
+- [UI 交互语言浏览器结果](docs/implementation/ui-language-browser-results.json)
 - [UI 控件浏览器审计结果](docs/implementation/ui-audit-browser-results.json)
 - [运行底座与自主能力增强](docs/implementation/运行底座与自主能力增强.md)
 - [SSE 同步与通知浏览器结果](docs/implementation/sync-notifications-browser-results.json)

@@ -1,0 +1,18 @@
+{
+  "status": "passed",
+  "checks": [
+    "keyboard-resizable macOS sidebar",
+    "double-click sidebar reset",
+    "long filename truncation preserves suffix",
+    "confirmation dialog blocks backdrop dismissal",
+    "notification center uses drawer",
+    "explicit action confirmation labels",
+    "toast completion feedback",
+    "chat stops following after upward scroll",
+    "jump-to-latest behavior",
+    "IME composition does not submit",
+    "iPhone layout has no horizontal overflow",
+    "no browser runtime errors"
+  ],
+  "synthetic_data": true
+}

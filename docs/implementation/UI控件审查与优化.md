@@ -50,3 +50,20 @@ browser errors: 0
 - `screenshots/ui-controls/dark-learning.png`
 
 审查脚本为 `scripts/browser_ui_audit.cjs`。它不会写入真实模型或云服务，只使用临时数据库、合成记忆和本机浏览器。
+
+## 交互语言复核
+
+基于 `fairy-ui-design` Skill 的第二轮优化进一步覆盖：
+
+- 通知和长内容使用右侧 Drawer；
+- 危险操作使用动作名称明确的确认 Modal，遮罩不能误关；
+- 操作完成使用 Toast；
+- 嵌套记录改为单层分隔，不再形成框中框；
+- 技能中心使用四阶段生命周期；
+- 自主预算使用真实进度计与数字动画；
+- macOS 侧栏可拖拽、键盘调节并持久化；
+- 聊天上翻后停止跟随，提供“跳到最新”；
+- 中文输入法组合态 Enter 不误发送；
+- 长文件名从中间截断并保留扩展名。
+
+对应浏览器证据见 `ui-language-browser-results.json`。

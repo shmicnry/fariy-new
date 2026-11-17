@@ -1,0 +1,5 @@
+interface:
+  display_name: "Fairy UI Design"
+  short_description: "Functional UI for Fairy cognition surfaces."
+  default_prompt: "Use $fairy-ui-design to audit and redesign Fairy interfaces."
+  brand_color: "#235F79"

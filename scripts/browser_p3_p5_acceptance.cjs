@@ -71,6 +71,7 @@ async function api(path, method = 'GET', body) {
     await statusSkill.getByRole('button', {name: '只读执行一次'}).click();
     await statusSkill.locator('.skill-output').getByText(/arbitrary_shell/).waitFor();
     await statusSkill.getByRole('button', {name: '停用并撤销授权'}).click();
+    await page.getByRole('dialog').getByRole('button', {name: '停用并撤销授权'}).click();
 
     const material = await api('learning/materials', 'POST', {
         title: '自主候选用例',
