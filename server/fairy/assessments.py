@@ -88,7 +88,7 @@ class AssessmentService(Service):
         with self.db.tx() as s:
             cached = self.replay(s, key, request)
             if cached is not None:
-                return view(self.get(s, cached["id"]))
+                return cached
             quiz = self.get(s, quiz_id, "quiz")
             data = json.loads(quiz.payload)
             if quiz.status != "active":
@@ -205,9 +205,17 @@ class AssessmentService(Service):
             code = (
                 e.code if isinstance(e, ModelError) else "invalid_assessment_response"
             )
+            code = {
+                "timeout": "local_timeout",
+                "unavailable": "local_unavailable",
+                "provider_http_error": "local_unavailable",
+                "invalid_response": "local_invalid_response",
+            }.get(code, code)
             if invocation:
                 router.settle(
-                    invocation, "unknown" if code == "timeout" else "failed", error=code
+                    invocation,
+                    "unknown" if code == "local_timeout" else "failed",
+                    error=code,
                 )
             return self.finish(row.id, snapshot, error=code)
 
@@ -235,4 +243,9 @@ class AssessmentService(Service):
                 "learning.assessment_finished",
                 {"id": id, "status": row.status},
             )
-            return view(row)
+            result = view(row)
+            result["source_eligible"] = all(
+                self.source_eligible(self.get(s, source_id))
+                for source_id in d.get("source_ids", [])
+            )
+            return result

@@ -5,6 +5,7 @@ const errors = {
     local_timeout: '本地模型超时。可以缩短问题、调整超时或选择其他本地模型。',
     invalid_response: '本地模型返回格式不完整，本次没有保存记忆。',
     local_input_too_large: '输入超出当前上下文窗口，请缩短内容或在模型页增大窗口。',
+    local_invalid_response: '本地模型作答格式不完整，本次测验没有计分。',
     context_snapshot_invalidated: '回答期间记忆发生了变化，旧回答已停止提交，请重新提问。',
     cloud_disabled: '云副模型尚未启用。',
     cloud_not_configured: '请先补全云副模型的地址、模型名和密钥。',
@@ -18,7 +19,13 @@ const errors = {
     cloud_input_too_large: '待发送内容超过云请求上限，本轮没有发出云请求。',
     model_config_changed: '模型配置已变化，请重新提问。',
     request_cancelled: '请求已中断。',
-    inference_outcome_unknown: '上次模型请求因进程中断而结果未知；没有自动重试，请确认后重新提问。'
+    source_not_eligible: '当前来源已过期、处于争议或已失效，不能继续生成学习结论。',
+    source_invalidated: '学习来源已经失效，请重新阅读并验证。',
+    reviewed_practice_required: '需要先提交练习并由你评定通过。',
+    practice_not_currently_passed: '最近一次练习评定未通过，不能归纳为习得知识。',
+    exact_source_quote_required: '请填写材料中的逐字原文依据。',
+    course_not_ready: '材料尚未读完或当前阶段不能提交此操作。',
+    inference_outcome_unknown: '上次模型请求因进程中断而结果未知；系统没有自动重试。'
 };
 export const explain = code => errors[code] || code;
 const fields = ['ollama_base_url', 'ollama_model', 'local_timeout_seconds', 'local_context_window', 'local_max_output_tokens', 'memory_mode', 'cloud_enabled', 'cloud_base_url', 'cloud_model', 'cloud_context', 'cloud_timeout_seconds', 'cloud_max_output_tokens', 'cloud_daily_request_limit', 'fallback_on'];

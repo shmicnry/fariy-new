@@ -60,7 +60,9 @@ const fs = require('node:fs');
     assert.equal(source.extraction.segments[0].label, 'paragraph:1');
     await page.locator('nav a[href="#assessments"]').click();
     await page.getByLabel('测验名称').fill('Synthetic source quiz');
-    await page.getByLabel('测验材料 ID').fill(source.id);
+    await page.getByLabel('测验材料', {
+        exact: true
+    }).selectOption(source.id);
     await page.getByLabel('测验原文依据').fill('The code of Cedar is VELIN.');
     await page.getByLabel('题目', {
         exact: true

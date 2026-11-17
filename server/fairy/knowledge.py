@@ -8,6 +8,68 @@ from .store import view, now
 
 
 class KnowledgeService(LearningService):
+    def _notify_revision(self, s):
+        for epoch in self.rows(s, "memory_policy"):
+            epoch.revision += 1
+
+    def _revoke_course(self, s, course, reason):
+        data = json.loads(course.payload)
+        data.update(
+            mastered=False,
+            stage="needs_practice",
+            steps_verified=min(data.get("steps_verified", 0), 2),
+            revocation={"reason": reason, "revoked_at": now()},
+        )
+        course.payload = json.dumps(data)
+        course.revision += 1
+        revoked_skills = []
+        for skill in self.rows(s, "acquired_skill"):
+            skill_data = json.loads(skill.payload)
+            if skill.status == "active" and skill_data.get("course_id") == course.id:
+                skill.status = "invalidated"
+                skill.revision += 1
+                skill.payload = json.dumps(
+                    {"invalidated_by_course": course.id, "reason": reason}
+                )
+                revoked_skills.append(skill.id)
+        self.db.emit(
+            s,
+            "owner",
+            "learning.mastery_revoked",
+            {
+                "course_id": course.id,
+                "reason": reason,
+                "acquired_skill_ids": revoked_skills,
+            },
+        )
+        return revoked_skills
+
+    def _reconcile_course(self, s, course_id):
+        course = self.get(s, course_id, "course")
+        data = json.loads(course.payload)
+        if course.status != "active":
+            return course
+        sources_valid = all(
+            self.source_eligible(self.get(s, source_id))
+            for source_id in data["source_ids"]
+        )
+        reviewed = [
+            row
+            for row in self.rows(s, "practice")
+            if row.status == "active"
+            and json.loads(row.payload).get("course_id") == course_id
+            and json.loads(row.payload).get("evaluation") != "ungraded"
+        ]
+        reviewed.sort(key=lambda row: json.loads(row.payload).get("reviewed_at", ""))
+        latest_passed = bool(
+            reviewed and json.loads(reviewed[-1].payload).get("evaluation") == "passed"
+        )
+        if not sources_valid:
+            self._revoke_course(s, course, "source_not_eligible")
+        elif reviewed and not latest_passed and data.get("mastered"):
+            self._revoke_course(s, course, "latest_practice_not_passed")
+        return self.get(s, course_id, "course")
+
     def link(self, url, title, key, collector):
         body = {"op": "link.import", "url": url, "title": title}
         with self.db.tx() as s:
@@ -77,13 +139,16 @@ class KnowledgeService(LearningService):
             }
             source.payload = json.dumps(d)
             source.revision += 1
-            for epoch in self.rows(s, "memory_policy"):
-                epoch.revision += 1
+            self._notify_revision(s)
             for job in self.rows(s, "job"):
                 if id in json.loads(job.payload).get(
                     "source_ids", []
                 ) and job.status in ("queued", "blocked"):
                     job.status = "queued" if self.source_eligible(source) else "blocked"
+            if not self.source_eligible(source):
+                for course in self.rows(s, "course"):
+                    if id in json.loads(course.payload).get("source_ids", []):
+                        self._revoke_course(s, course, "source_not_eligible")
             self.db.emit(s, "owner", "source.reviewed", {"id": id, "rating": rating})
             return view(source)
 
@@ -169,6 +234,7 @@ class KnowledgeService(LearningService):
             )
             r.payload = json.dumps(d)
             r.revision += 1
+            self._reconcile_course(s, d["course_id"])
             self.db.emit(
                 s, "owner", "learning.practice_graded", {"id": id, "score": score}
             )

@@ -8,6 +8,7 @@ import {
     renderModels,
     renderMemories,
     renderConversation,
+    explain,
     watchEvents
 } from './p1.js';
 // No user/provider data is inserted as raw HTML. The service token stays in memory only.
@@ -103,7 +104,7 @@ function records(p, rows) {
         const state = r.stage || r.status;
         if (state) row.append(el('p', (statuses[state] || state) + (r.steps_total ? ' · 已核验 ' + r.steps_verified + ' / ' + r.steps_total : ''), 'muted'));
         if (r.reply) row.append(el('p', r.reply));
-        if (r.error) row.append(el('p', r.error === 'model_not_configured' ? '尚未配置模型，请按启动说明设置模型后重试。' : r.error));
+        if (r.error) row.append(el('p', explain(r.error)));
         if (r.summary) row.append(el('p', r.summary));
         if (r.notes) row.append(el('p', r.notes));
         if (r.executable === false) row.append(el('p', '知识条目，无执行权限', 'muted'));
@@ -213,6 +214,7 @@ async function render() {
         for (const course of await api('learning/courses')) {
             const cp = panel(course.title);
             records(cp, [course]);
+            if (!course.source_eligible) cp.append(el('p', '来源已失效，课程不能继续确认或将学习结论归纳为知识。', 'route-note'));
             if (course.total_chunks) cp.append(el('p', '已阅读 ' + course.read_chunks + ' / ' + course.total_chunks + ' 块（不代表掌握）', 'muted'));
             const citations = el('div');
             cp.append(button('查看阅读出处', async () => {
@@ -242,7 +244,10 @@ async function render() {
                 cp.append(button('评定练习与查看效果', async () => {
                     evaluation.replaceChildren();
                     const report = await api('learning/courses/' + course.id + '/effect');
-                    evaluation.append(el('p', '已提交 ' + report.attempts + ' 次，已复核 ' + report.reviewed_attempts + ' 次；最近分数 ' + (report.latest_score ?? '暂无') + ' / 5（人工量表，不代表通用能力）'));
+                    evaluation.append(el('p', '已提交 ' + report.attempts + ' 次，历史已复核 ' + report.reviewed_attempts + ' 次；' + (report.source_eligible ? '当前最近分数 ' + (report.latest_score ?? '暂无') + ' / 5' : '来源已失效，当前没有有效分数；历史最近分数 ' + (report.historical_latest_score ?? '暂无') + ' / 5') + '（人工量表，不代表通用能力）'));
+                    if (report.model_assessment_runs) {
+                        evaluation.append(el('p', '关联的本地模型固定题目测验已完成 ' + report.model_assessment_runs + ' 次；最近一次答对 ' + report.model_assessment_latest.correct_count + ' / ' + report.model_assessment_latest.total + '（' + report.model_assessment_latest.mode + '）。'));
+                    }
                     for (const item of await api('learning/courses/' + course.id + '/practice')) {
                         const box = el('div', undefined, 'memory-row');
                         box.append(el('p', item.answer), el('blockquote', item.evidence_quote));
@@ -266,7 +271,7 @@ async function render() {
                     }
                 }), evaluation);
                 const proof = el('textarea');
-                proof.placeholder = '记录你用于验证的练习及实际结果';
+                proof.placeholder = '填写用于最终确认的逐字原文依据';
                 cp.append(proof, button('记录通过', async () => {
                     await api('learning/courses/' + course.id + '/assess', 'POST', {
                         revision: course.revision,

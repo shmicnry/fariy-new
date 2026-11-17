@@ -7,9 +7,11 @@
     "source search",
     "no runtime errors",
     "source review",
-    "world claim with quote",
+    "world claim with quote and withdrawal",
     "practice rubric grade",
-    "course completion gate"
+    "exact final evidence",
+    "course completion gate",
+    "source deletion revokes acquired knowledge"
   ],
   "synthetic_data": true
 }

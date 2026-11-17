@@ -53,7 +53,16 @@ class LearningService(Service):
             )
             fail(422, code)
         # No file names or file content become executable paths or instructions.
-        result = self.material(filename, text, key)
+        result = self.material(
+            filename,
+            text,
+            key,
+            request_body={
+                "op": "file.ingest",
+                "filename": filename,
+                "content_base64": encoded,
+            },
+        )
         with self.db.tx() as s:
             source = self.get(s, result["material"]["id"], "material")
             if source.status == "active":
@@ -101,7 +110,7 @@ class LearningService(Service):
                 fail(422, "practice_evidence_required")
             for id in d["source_ids"]:
                 source = self.get(s, id)
-                if source.status != "active" or evidence not in json.loads(
+                if not self.source_eligible(source) or evidence not in json.loads(
                     source.payload
                 ).get("text", ""):
                     fail(422, "exact_source_quote_required")

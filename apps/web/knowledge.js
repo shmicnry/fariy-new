@@ -29,7 +29,7 @@ export async function renderKnowledge(ui) {
     sources.append(el('p', '来源标签是你的复核判断，不是自动事实认证。争议、拒绝或过期来源不参与有效检索。', 'muted'));
     for (const r of await api('learning/sources')) {
         const box = el('article', undefined, 'memory-row');
-        box.append(el('h3', r.title), el('p', '来源 ID：' + r.id), el('p', r.url || '所有者投喂'));
+        box.append(el('h3', r.title), el('p', '来源 ID：' + r.id), el('p', r.url || '所有者投喂'), el('p', r.source_eligible ? '当前可用于学习与检索' : '当前不可用于学习与检索', r.source_eligible ? 'muted' : 'route-note'));
         const select = el('select');
         select.setAttribute('aria-label', '来源标签 ' + r.title);
         for (const [v, t] of Object.entries({
@@ -56,6 +56,16 @@ export async function renderKnowledge(ui) {
             });
             await ui.refresh()
         }));
+        const removal = el('details');
+        removal.append(
+            el('summary', '删除这份来源'),
+            el('p', '删除会使引用它的课程、练习、测验结果、知识主张和对话派生内容失效。', 'muted'),
+            button('确认删除来源', async () => {
+                await api('records/' + r.id + '?revision=' + r.revision, 'DELETE');
+                await ui.refresh()
+            })
+        );
+        box.append(removal);
         sources.append(box)
     }
     const world = panel('世界知识与争议');
@@ -75,5 +85,18 @@ export async function renderKnowledge(ui) {
         });
         await ui.refresh()
     }));
-    for (const c of await api('world/claims')) world.append(el('h3', c.subject + ' / ' + c.predicate), el('p', c.value), el('blockquote', c.quote), el('small', (c.source_eligible ? '来源当前有效' : '来源当前不参与检索') + '；有不同主张 ' + c.conflicts_with.length + ' 条'));
+    for (const c of await api('world/claims')) {
+        const card = el('article', undefined, 'memory-row');
+        card.append(
+            el('h3', c.subject + ' / ' + c.predicate),
+            el('p', c.value),
+            el('blockquote', c.quote),
+            el('small', (c.source_eligible ? '来源当前有效' : '来源当前不参与检索') + '；有不同主张 ' + c.conflicts_with.length + ' 条'),
+            button('撤回这条主张', async () => {
+                await api('records/' + c.id + '?revision=' + c.revision, 'DELETE');
+                await ui.refresh()
+            })
+        );
+        world.append(card)
+    }
 }

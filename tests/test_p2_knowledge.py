@@ -111,7 +111,7 @@ def test_practice_review_required_before_mastery(env):
             json={
                 "revision": course["revision"],
                 "passed": True,
-                "evidence": "人工核对练习",
+                "evidence": "植物需要水分。",
             },
         ).status_code
         == 200

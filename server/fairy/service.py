@@ -62,6 +62,21 @@ class Service:
                     "link_import",
                 ):
                     return view(record)
+                if record and record.kind in (
+                    "quiz",
+                    "world_claim",
+                    "assessment_attempt",
+                ):
+                    current = view(record)
+                    data = json.loads(record.payload)
+                    refs = [
+                        s.get(Record, source_id)
+                        for source_id in data.get("source_ids", [])
+                    ]
+                    current["source_eligible"] = all(
+                        self.source_eligible(ref) for ref in refs
+                    )
+                    return current
             return {k: self.resolve_cached(s, v) for k, v in result.items()}
         return result
 
@@ -395,14 +410,17 @@ class Service:
             key,
         )
 
-    def material(self, title, text, key):
+    def material(self, title, text, key, request_body=None):
         with self.db.tx() as s:
-            body = {"title": title, "text": text}
+            body = request_body or {"title": title, "text": text}
             cached = self.replay(s, key, body)
             if cached is not None:
                 return cached
             material = self.db.add(
-                s, "owner", "material", dict(body, source_type="user_upload")
+                s,
+                "owner",
+                "material",
+                {"title": title, "text": text, "source_type": "user_upload"},
             )
             course = self.db.add(
                 s,
@@ -442,6 +460,24 @@ class Service:
             d = json.loads(course.payload)
             if course.status != "active" or not d.get("mastered"):
                 fail(409, "course_not_verified")
+            if any(not self.source_eligible(self.get(s, x)) for x in d["source_ids"]):
+                fail(409, "source_not_eligible")
+            if d.get("practice_required"):
+                reviewed = [
+                    x
+                    for x in self.rows(s, "practice")
+                    if x.status == "active"
+                    and json.loads(x.payload).get("course_id") == course_id
+                    and json.loads(x.payload).get("evaluation") != "ungraded"
+                ]
+                reviewed.sort(
+                    key=lambda x: json.loads(x.payload).get("reviewed_at", "")
+                )
+                if (
+                    not reviewed
+                    or json.loads(reviewed[-1].payload).get("evaluation") != "passed"
+                ):
+                    fail(409, "practice_not_currently_passed")
             body = {"course_id": course_id}
             old = self.replay(s, key, body)
             if old is not None:
@@ -492,11 +528,20 @@ class Service:
                     and json.loads(x.payload).get("course_id") == id
                     and json.loads(x.payload).get("evaluation") != "ungraded"
                 ]
+                reviewed.sort(
+                    key=lambda x: json.loads(x.payload).get("reviewed_at", "")
+                )
                 if (
                     not reviewed
                     or json.loads(reviewed[-1].payload).get("evaluation") != "passed"
                 ):
                     fail(409, "reviewed_practice_required")
+                if not any(
+                    evidence
+                    in json.loads(self.get(s, source_id).payload).get("text", "")
+                    for source_id in d["source_ids"]
+                ):
+                    fail(422, "exact_source_quote_required")
             d.update(
                 stage="completed" if passed else "needs_practice",
                 mastered=passed,

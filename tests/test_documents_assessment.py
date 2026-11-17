@@ -232,6 +232,77 @@ def test_duplicate_question_answers_fail(tmp_path, monkeypatch):
     assert r["status"] == "failed" and "correct_count" not in r
 
 
+def test_effect_separates_current_and_invalidated_model_assessment(
+    tmp_path, monkeypatch
+):
+    def handler(req):
+        return response(1)
+
+    app, c, quiz = setup(tmp_path, monkeypatch, handler)
+    c.post(
+        "/v2/learning/quizzes/" + quiz["id"] + "/runs",
+        json={"mode": "open_book"},
+        headers={"Idempotency-Key": "effect-run"},
+    )
+    course = app.state.service.list("course")[0]
+    source_id = course["source_ids"][0]
+    source = c.get("/v2/learning/sources").json()[0]
+    before = c.get("/v2/learning/courses/" + course["id"] + "/effect").json()
+    assert before["model_assessment_runs"] == 1
+    assert before["invalidated_model_assessment_runs"] == 0
+    assert (
+        c.patch(
+            "/v2/learning/sources/" + source_id,
+            json={
+                "revision": source["revision"],
+                "rating": "disputed",
+                "reason": "验证失效后的效果统计",
+                "expires_at": None,
+            },
+        ).status_code
+        == 200
+    )
+    after = c.get("/v2/learning/courses/" + course["id"] + "/effect").json()
+    assert after["model_assessment_runs"] == 0
+    assert after["invalidated_model_assessment_runs"] == 1
+
+
+def test_assessment_idempotency_replay_refreshes_source_eligibility(
+    tmp_path, monkeypatch
+):
+    def handler(req):
+        return response(1)
+
+    app, c, quiz = setup(tmp_path, monkeypatch, handler)
+    path = "/v2/learning/quizzes/" + quiz["id"] + "/runs"
+    first = c.post(
+        path,
+        json={"mode": "open_book"},
+        headers={"Idempotency-Key": "stale-replay"},
+    ).json()
+    assert first["source_eligible"] is True
+    source = c.get("/v2/learning/sources").json()[0]
+    assert (
+        c.patch(
+            "/v2/learning/sources/" + source["id"],
+            json={
+                "revision": source["revision"],
+                "rating": "disputed",
+                "reason": "复核重放结果",
+                "expires_at": None,
+            },
+        ).status_code
+        == 200
+    )
+    replay = c.post(
+        path,
+        json={"mode": "open_book"},
+        headers={"Idempotency-Key": "stale-replay"},
+    ).json()
+    assert replay["id"] == first["id"]
+    assert replay["source_eligible"] is False
+
+
 def test_boolean_model_choice_is_not_a_numeric_answer(tmp_path, monkeypatch):
     def handler(req):
         return httpx.Response(

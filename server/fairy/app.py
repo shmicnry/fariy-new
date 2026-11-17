@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select
-from .store import Store, Event, view
+from .store import Store, Event, now, view
 from .service import fail
 from .memories import MemoryService
 from .model_settings import ModelSettings, ModelConfig
@@ -92,7 +92,7 @@ class WorldClaim(Strict):
 
 class PracticeGrade(Strict):
     revision: int = Field(ge=1)
-    score: int = Field(ge=0, le=5)
+    score: int = Field(ge=0, le=5, strict=True)
     feedback: str = Field(min_length=1, max_length=2000)
 
 
@@ -207,6 +207,10 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "reviewed_memory": True,
             "memory_corrections": True,
             "text_materials": True,
+            "document_formats": [".txt", ".md", ".pdf", ".docx"],
+            "source_review": True,
+            "world_claims": True,
+            "fixed_choice_assessments": True,
             "mac_execute": False,
             "video": False,
             "automatic_mastery": False,
@@ -326,7 +330,13 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
 
     @api.get("/learning/sources")
     def sources():
-        return service.list("material")
+        with db.sessions() as s:
+            results = []
+            for row in service.list("material"):
+                source = service.get(s, row["id"], "material")
+                row["source_eligible"] = service.source_eligible(source)
+                results.append(row)
+            return results
 
     @api.patch("/learning/sources/{id}")
     def source_review(id: str, body: SourceReview):
@@ -354,7 +364,17 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
 
     @api.get("/learning/quizzes")
     def quizzes():
-        return service.list("quiz")
+        with db.sessions() as s:
+            results = []
+            for row in service.list("quiz"):
+                quiz = service.get(s, row["id"], "quiz")
+                data = json.loads(quiz.payload)
+                row["source_eligible"] = all(
+                    service.source_eligible(service.get(s, source_id))
+                    for source_id in data["source_ids"]
+                )
+                results.append(row)
+            return results
 
     @api.post("/learning/quizzes/{id}/runs")
     async def run_quiz(id: str, body: RunInput, k=Depends(key)):
@@ -362,7 +382,20 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
 
     @api.get("/learning/assessment-runs")
     def assessment_runs():
-        return service.list("assessment_attempt")
+        with db.sessions() as s:
+            results = []
+            for row in service.list("assessment_attempt"):
+                record = service.get(s, row["id"], "assessment_attempt")
+                data = json.loads(record.payload)
+                refs = [
+                    service.get(s, source_id)
+                    for source_id in data.get("source_ids", [])
+                ]
+                row["source_eligible"] = all(
+                    service.source_eligible(ref) for ref in refs
+                )
+                results.append(row)
+            return results
 
     @api.post("/learning/assessment-runs/{id}/cancel")
     def stop_assessment(id: str):
@@ -371,6 +404,16 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             if r.status == "pending":
                 r.status = "interrupted"
                 r.revision += 1
+                for invocation in service.rows(s, "model_invocation"):
+                    data = json.loads(invocation.payload)
+                    if data.get("turn_id") == id and invocation.status == "started":
+                        invocation.status = "unknown"
+                        invocation.revision += 1
+                        data.update(
+                            error="request_cancelled",
+                            finished_at=now(),
+                        )
+                        invocation.payload = json.dumps(data)
             return view(r)
 
     @api.post("/learning/materials")
@@ -428,19 +471,60 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     @api.get("/learning/courses/{id}/effect")
     def learning_effect(id: str):
         with db.sessions() as s:
-            service.get(s, id, "course")
+            course = service.get(s, id, "course")
+        course_sources = set(json.loads(course.payload).get("source_ids", []))
+        with db.sessions() as s:
+            course_source_eligible = all(
+                service.source_eligible(service.get(s, source_id))
+                for source_id in course_sources
+            )
         all_rows = [r for r in service.list("practice") if r["course_id"] == id]
         graded = sorted(
             [r for r in all_rows if r["evaluation"] != "ungraded"],
             key=lambda r: r["reviewed_at"],
         )
+        assessment_attempts = []
+        invalidated_assessment_attempts = 0
+        with db.sessions() as s:
+            for attempt in service.list("assessment_attempt"):
+                if attempt.get("status") != "completed" or not course_sources & set(
+                    attempt.get("source_ids", [])
+                ):
+                    continue
+                refs = [
+                    service.get(s, source_id)
+                    for source_id in attempt.get("source_ids", [])
+                ]
+                if all(service.source_eligible(ref) for ref in refs):
+                    assessment_attempts.append(attempt)
+                else:
+                    invalidated_assessment_attempts += 1
         return {
             "attempts": len(all_rows),
             "reviewed_attempts": len(graded),
-            "latest_score": graded[-1]["score"] if graded else None,
-            "initial_score": graded[0]["score"] if graded else None,
+            "source_eligible": course_source_eligible,
+            "latest_score": (
+                graded[-1]["score"] if graded and course_source_eligible else None
+            ),
+            "historical_latest_score": graded[-1]["score"] if graded else None,
+            "initial_score": (
+                graded[0]["score"] if graded and course_source_eligible else None
+            ),
             "score_change": (
-                graded[-1]["score"] - graded[0]["score"] if graded else None
+                graded[-1]["score"] - graded[0]["score"]
+                if graded and course_source_eligible
+                else None
+            ),
+            "model_assessment_runs": len(assessment_attempts),
+            "invalidated_model_assessment_runs": invalidated_assessment_attempts,
+            "model_assessment_latest": (
+                {
+                    "correct_count": assessment_attempts[-1]["correct_count"],
+                    "total": assessment_attempts[-1]["total"],
+                    "mode": assessment_attempts[-1]["mode"],
+                }
+                if assessment_attempts
+                else None
             ),
             "method": "owner_rubric",
             "generalization_verified": False,
@@ -448,7 +532,17 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
 
     @api.get("/learning/courses")
     def courses():
-        return service.list("course")
+        with db.sessions() as s:
+            results = []
+            for row in service.list("course"):
+                course = service.get(s, row["id"], "course")
+                data = json.loads(course.payload)
+                row["source_eligible"] = all(
+                    service.source_eligible(service.get(s, source_id))
+                    for source_id in data["source_ids"]
+                )
+                results.append(row)
+            return results
 
     @api.post("/learning/courses/{id}/assess")
     def assess(id: str, body: Assessment):

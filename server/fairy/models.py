@@ -83,7 +83,10 @@ class ModelRouter:
                     turn.status = "failed"
                     turn.revision += 1
                     payload = json.loads(turn.payload)
-                    payload.update(reply=None, error="inference_outcome_unknown")
+                    if turn.kind == "assessment_attempt":
+                        payload.update(error="inference_outcome_unknown")
+                    else:
+                        payload.update(reply=None, error="inference_outcome_unknown")
                     turn.payload = json.dumps(payload)
                 recovered.append(row.id)
                 self.db.emit(

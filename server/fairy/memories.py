@@ -500,9 +500,16 @@ class MemoryService(Service):
                     "note",
                     "acquired_skill",
                     "course",
+                    "quiz",
+                    "world_claim",
                 ):
                     fail(422, "record_kind_not_deletable")
                 result = self._invalidate(s, id, revision)
+                if r.kind == "world_claim":
+                    extra_affected = self._stale_dialogue(s, {id})
+                    result["affected"] = sorted(
+                        set(result["affected"]) | extra_affected
+                    )
             self.bump_policy(s, suppress)
             self._scrub_cached(s)
             return result
