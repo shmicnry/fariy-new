@@ -1,4 +1,7 @@
 import {
+    renderAssessments
+} from './assessments.js';
+import {
     renderKnowledge
 } from './knowledge.js';
 import {
@@ -19,6 +22,7 @@ const names = {
     memories: '记忆审阅',
     models: '模型与路由',
     learning: '学习中心',
+    assessments: '学习测验',
     evolution: '进化实验',
     skills: '技能中心',
     mac: 'Mac 操作',
@@ -127,6 +131,7 @@ async function render() {
         refresh: render
     };
     if (route === 'world') return renderKnowledge(ui);
+    if (route === 'assessments') return renderAssessments(ui);
     if (route === 'models') return renderModels(ui);
     if (route === 'memories') {
         document.querySelector('nav a[href="#memories"]').textContent = names.memories;
@@ -181,11 +186,11 @@ async function render() {
         const uploadPanel = panel('学习文件与来源检索');
         const file = el('input');
         file.type = 'file';
-        file.accept = '.txt,.md';
+        file.accept = '.txt,.md,.pdf,.docx';
         file.setAttribute('aria-label', '选择文字文件');
         uploadPanel.append(file, button('上传并学习', async () => {
             const selected = file.files[0];
-            if (!selected) throw Error('请选择 TXT 或 Markdown 文件');
+            if (!selected) throw Error('请选择 TXT、Markdown、PDF 或 DOCX 文件');
             if (selected.size > 1048576) throw Error('文件上限为 1 MiB');
             const bytes = new Uint8Array(await selected.arrayBuffer());
             let binary = '';
@@ -212,7 +217,7 @@ async function render() {
             const citations = el('div');
             cp.append(button('查看阅读出处', async () => {
                 citations.replaceChildren();
-                for (const part of await api('learning/courses/' + course.id + '/chunks')) citations.append(el('p', part.text), el('small', '原文字符位置 ' + part.start + '–' + part.end))
+                for (const part of await api('learning/courses/' + course.id + '/chunks')) citations.append(el('p', part.text), el('small', '原文字符位置 ' + part.start + '–' + part.end + (part.locations?.length ? '；' + part.locations.map(x => x.label).join('、') : '')))
             }), citations);
 
             if (['awaiting_assessment', 'needs_practice'].includes(course.stage)) {

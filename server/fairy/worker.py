@@ -40,6 +40,14 @@ def tick(db):
                 {
                     "course_id": course.id,
                     "source_ids": d["source_ids"] + [course.id],
+                    "locations": [
+                        loc
+                        for source in sources
+                        for loc in json.loads(source.payload)
+                        .get("extraction", {})
+                        .get("segments", [])
+                        if loc["start"] < part["end"] and loc["end"] > part["start"]
+                    ],
                     **part,
                 },
             )

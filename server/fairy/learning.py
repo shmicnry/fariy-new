@@ -28,8 +28,8 @@ class LearningService(Service):
     def ingest(self, filename, encoded, key):
         if "/" in filename or "\\" in filename or not filename.strip():
             fail(422, "filename_must_be_basename")
-        if PurePath(filename).suffix.lower() not in (".txt", ".md"):
-            fail(415, "supported_files_txt_md_only")
+        if PurePath(filename).suffix.lower() not in (".txt", ".md", ".pdf", ".docx"):
+            fail(415, "supported_files_txt_md_pdf_docx_only")
         if len(encoded) > 1_400_000:
             fail(413, "file_too_large")
         try:
@@ -38,15 +38,34 @@ class LearningService(Service):
             fail(422, "invalid_base64")
         if len(raw) > 1_048_576:
             fail(413, "file_too_large")
+        from .document_extract import extract
+
         try:
-            text = raw.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            fail(422, "utf8_required")
-        if not text.strip() or "\x00" in text or len(text) > 256000:
-            fail(422, "invalid_text_file")
+            extraction = extract(raw, PurePath(filename).suffix.lower())
+            text = extraction["text"]
+        except (ValueError, UnicodeDecodeError) as error:
+            code = (
+                str(error)
+                if isinstance(error, ValueError)
+                and str(error).isascii()
+                and len(str(error)) < 100
+                else "document_extraction_failed"
+            )
+            fail(422, code)
         # No file names or file content become executable paths or instructions.
         result = self.material(filename, text, key)
         with self.db.tx() as s:
+            source = self.get(s, result["material"]["id"], "material")
+            if source.status == "active":
+                d = json.loads(source.payload)
+                if "extraction" not in d:
+                    d.update(
+                        file_sha256=hashlib.sha256(raw).hexdigest(),
+                        file_format=PurePath(filename).suffix.lower(),
+                        extraction={k: v for k, v in extraction.items() if k != "text"},
+                    )
+                    source.payload = json.dumps(d)
+            result["material"] = view(source)
             course = self.get(s, result["course"]["id"], "course")
             d = json.loads(course.payload)
             if course.status == "active" and not d.get("practice_required"):

@@ -17,6 +17,7 @@ from .model_settings import ModelSettings, ModelConfig
 from .models import ModelRouter
 from .learning import LearningService
 from .knowledge import KnowledgeService
+from .assessments import AssessmentService, QuizInput, RunInput
 from .link_fetch import fetch_text, validate_url
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -346,6 +347,31 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     @api.patch("/learning/practice/{id}")
     def grade(id: str, body: PracticeGrade):
         return KnowledgeService(db).grade(id, body.revision, body.score, body.feedback)
+
+    @api.post("/learning/quizzes")
+    def create_quiz(body: QuizInput, k=Depends(key)):
+        return AssessmentService(db).quiz(body, k)
+
+    @api.get("/learning/quizzes")
+    def quizzes():
+        return service.list("quiz")
+
+    @api.post("/learning/quizzes/{id}/runs")
+    async def run_quiz(id: str, body: RunInput, k=Depends(key)):
+        return await AssessmentService(db).run(id, body.mode, k, router)
+
+    @api.get("/learning/assessment-runs")
+    def assessment_runs():
+        return service.list("assessment_attempt")
+
+    @api.post("/learning/assessment-runs/{id}/cancel")
+    def stop_assessment(id: str):
+        with db.tx() as s:
+            r = service.get(s, id, "assessment_attempt")
+            if r.status == "pending":
+                r.status = "interrupted"
+                r.revision += 1
+            return view(r)
 
     @api.post("/learning/materials")
     def material(body: Material, k=Depends(key)):

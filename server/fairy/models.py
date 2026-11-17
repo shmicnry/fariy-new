@@ -159,7 +159,9 @@ class ModelRouter:
 
     def reserve(self, turn_id, phase, conf, snapshot, reason):
         with self.db.tx() as s:
-            turn = self.service.get(s, turn_id, "turn")
+            turn = self.service.get(s, turn_id)
+            if turn.kind not in ("turn", "assessment_attempt"):
+                raise ModelError("invalid_dispatch_parent")
             if turn.status != "pending":
                 raise ModelError("turn_no_longer_pending")
             for id, revision in snapshot.items():

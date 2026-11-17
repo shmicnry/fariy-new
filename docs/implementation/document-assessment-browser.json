@@ -1,0 +1,29 @@
+{
+  "status": "passed",
+  "model": "qwen3:4b",
+  "checks": [
+    "real DOCX upload",
+    "isolated paragraph extraction",
+    "worker",
+    "fixed quiz creation",
+    "real local Ollama open-book run",
+    "real local Ollama closed-book run",
+    "deterministic score display",
+    "no browser errors"
+  ],
+  "scores": [
+    {
+      "mode": "open_book",
+      "correct_count": 1,
+      "total": 1
+    },
+    {
+      "mode": "closed_book",
+      "correct_count": 0,
+      "total": 1
+    }
+  ],
+  "synthetic_data": true,
+  "generalization_verified": false,
+  "cloud_calls": 0
+}
