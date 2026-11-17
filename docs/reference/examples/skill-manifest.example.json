@@ -1,0 +1,124 @@
+{
+  "schema_version": "fairy.skill.v1",
+  "id": "fairy.study.public-docs",
+  "version": "1.0.0",
+  "kind": "declarative_workflow",
+  "install_state": "quarantined",
+  "source": {
+    "type": "local_package",
+    "digest": "computed_on_import"
+  },
+  "purpose": "研究已授权的公开文档，形成有来源的笔记并通过未见问题验证",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "question",
+      "origins",
+      "notes_scope"
+    ],
+    "properties": {
+      "question": {
+        "type": "string"
+      },
+      "origins": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "notes_scope": {
+        "type": "string"
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "source_refs",
+      "claims",
+      "assessment",
+      "artifact_refs"
+    ]
+  },
+  "tools": [
+    "web.search",
+    "web.read",
+    "knowledge.propose",
+    "quiz.evaluate",
+    "notes.write"
+  ],
+  "capabilities": [
+    "public_web_read",
+    "scoped_note_write"
+  ],
+  "data_scopes": [
+    "learning_notes"
+  ],
+  "network_policy": "grant_public_origins_intersection",
+  "steps": [
+    {
+      "id": "read",
+      "tool": "web.read",
+      "requires": "active_grant"
+    },
+    {
+      "id": "compare",
+      "operation": "cross_check_sources",
+      "depends_on": [
+        "read"
+      ]
+    },
+    {
+      "id": "practice",
+      "tool": "quiz.evaluate",
+      "depends_on": [
+        "compare"
+      ]
+    },
+    {
+      "id": "draft",
+      "tool": "knowledge.propose",
+      "depends_on": [
+        "practice"
+      ]
+    },
+    {
+      "id": "save",
+      "tool": "notes.write",
+      "depends_on": [
+        "draft"
+      ],
+      "write_mode": "new_uuid_object"
+    }
+  ],
+  "success_checks": [
+    "source_refs_resolve",
+    "heldout_quiz_pass",
+    "artifact_hash_matches"
+  ],
+  "budgets": {
+    "max_steps": 12,
+    "max_seconds": 900,
+    "max_tokens": 16000
+  },
+  "cancellation": {
+    "safe_points": "between_steps"
+  },
+  "compensation": "remove_unpublished_drafts_only",
+  "runtime": {
+    "type": "declarative",
+    "arbitrary_shell": false
+  },
+  "dependencies": [],
+  "tests": [
+    {
+      "id": "missing_source",
+      "expect": "unverified_not_published"
+    },
+    {
+      "id": "scope_revoked",
+      "expect": "stop_before_write"
+    }
+  ]
+}

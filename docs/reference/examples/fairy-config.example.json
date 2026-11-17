@@ -1,0 +1,94 @@
+{
+  "schema_version": "fairy.config.v2",
+  "revision": 1,
+  "enabled": false,
+  "scope": "instance",
+  "autonomy": {
+    "mode": "paused",
+    "timezone": "Asia/Shanghai",
+    "max_background_jobs": 1,
+    "daily_minutes": 45,
+    "daily_tokens": 64000,
+    "daily_sources": 20,
+    "max_replans": 6,
+    "idle_seconds": 300,
+    "cloud_policy": "block_unpriced_unattended",
+    "reserve_before_call": true
+  },
+  "cognition": {
+    "focus_slots": 4,
+    "candidate_slots": 8,
+    "context_limit": "resolve_from_model"
+  },
+  "learning": {
+    "topics": [
+      "用户选择的主题"
+    ],
+    "origins": [
+      "https://example.test"
+    ],
+    "source_policy": "public_allowlist",
+    "cross_check": true,
+    "quiz_required": true,
+    "publish_unverified": false
+  },
+  "evolution": {
+    "auto_allowed": [
+      "knowledge",
+      "summary",
+      "low_risk_strategy"
+    ],
+    "code_release": "candidate_only",
+    "identity_changes": "explicit_authorization",
+    "evaluator_mutable_by_candidate": false,
+    "canary_tasks": 10,
+    "rollback_on": [
+      "critical_regression",
+      "scope_violation"
+    ]
+  },
+  "mac": {
+    "enabled": false,
+    "mode": "dry_run",
+    "device_id": null,
+    "allow_bundle_ids": [
+      "com.apple.finder",
+      "com.apple.TextEdit"
+    ],
+    "write_root_ids": [
+      "fairy_workspace"
+    ],
+    "terminal_policy": "reviewed_templates_only",
+    "max_steps": 20,
+    "session_minutes": 15,
+    "pause_on_human_input": true,
+    "hard_gate_each_action": true
+  },
+  "avatar": {
+    "asset_id": "fairy.original",
+    "pet_allowed": false,
+    "device_visible": false,
+    "hide_fullscreen": true,
+    "capture_on_pet_enable": false
+  },
+  "cards": {
+    "enabled_types": [
+      "reminder",
+      "task",
+      "approval",
+      "learning",
+      "result",
+      "knowledge_conflict"
+    ],
+    "quiet_hours": {
+      "start": "23:00",
+      "end": "08:00"
+    },
+    "daily_proactive_limit": 3,
+    "progress_min_seconds": 5,
+    "approval_fallback": "text_same_business_api"
+  },
+  "secrets": {
+    "providers": "server_secret_reference_only"
+  }
+}

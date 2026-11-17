@@ -1,0 +1,94 @@
+{
+  "note": "拟实施契约示例；enabled=false，人物与关系均为脱敏示例数据",
+  "persons": [
+    {
+      "person_id": "p-user",
+      "display_name": "主人",
+      "addressing_preference": "称呼“主人”",
+      "closeness": 0.92,
+      "recent_interaction": "2026-11-16T08:40:00+08:00",
+      "verification": "confirmed",
+      "pinned": true
+    },
+    {
+      "person_id": "p-mom",
+      "display_name": "妈妈",
+      "addressing_preference": "称呼“阿姨”",
+      "closeness": 0.55,
+      "recent_interaction": "2026-11-10T19:00:00+08:00",
+      "verification": "confirmed",
+      "pinned": false
+    },
+    {
+      "person_id": "p-brother",
+      "display_name": "哥哥",
+      "addressing_preference": "称呼“哥哥”",
+      "closeness": 0.7,
+      "recent_interaction": "2026-11-12T21:00:00+08:00",
+      "verification": "confirmed",
+      "pinned": true
+    }
+  ],
+  "edges": [
+    {
+      "from": "p-user",
+      "to": "p-mom",
+      "type": "家人-母子",
+      "strength": 0.9,
+      "since": "2026-11-10",
+      "origin_event": "ke-2026-11-mom-visit",
+      "source_cluster": "sc-2026-11-daily-3",
+      "verification": "confirmed"
+    },
+    {
+      "from": "p-user",
+      "to": "p-brother",
+      "type": "家人-兄弟",
+      "strength": 0.8,
+      "since": "2026-11-12",
+      "origin_event": "ke-2026-11-brother-game",
+      "source_cluster": "sc-2026-11-daily-5",
+      "verification": "confirmed"
+    },
+    {
+      "from": "p-mom",
+      "to": "p-brother",
+      "type": "家人-母子",
+      "strength": 0.8,
+      "source_cluster": "sc-2026-11-family-talk-1",
+      "verification": "待核实"
+    }
+  ],
+  "key_events": [
+    {
+      "event_id": "ke-2026-11-mom-visit",
+      "when": "2026-11-10",
+      "who": [
+        "p-mom",
+        "p-user"
+      ],
+      "where": "家中",
+      "summary": "妈妈来访，全家一起吃了晚饭",
+      "deep_links": [
+        "ep-2026-11-10-dinner"
+      ],
+      "source_cluster": "sc-2026-11-daily-3"
+    },
+    {
+      "event_id": "ke-2026-11-brother-game",
+      "when": "2026-11-12",
+      "who": [
+        "p-brother",
+        "p-user"
+      ],
+      "where": "线上",
+      "summary": "哥哥和主人联机打了两局游戏",
+      "deep_links": [
+        "ep-2026-11-12-game"
+      ],
+      "source_cluster": "sc-2026-11-daily-5"
+    }
+  ],
+  "closeness_formula": "closeness(P) = sum(I_e*exp(-dt_e/tau_c)) / (sum(I_e*exp(-dt_e/tau_c)) + c0); tau_c=30d, c0=5",
+  "enabled": false
+}

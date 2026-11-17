@@ -1,0 +1,18 @@
+{
+  "schema_version": "fairy.disposition.v1",
+  "id": "disposition:parting-sensitivity",
+  "topic": "离别与突然消失",
+  "direction": "敏感/回避",
+  "strength": 0.62,
+  "support": {
+    "evidence_cluster_count": 4,
+    "source_clusters": ["cluster:2026-10-family", "cluster:2026-11-friends"],
+    "first_observed": "server_generated_rfc3339",
+    "last_reinforced": "server_generated_rfc3339"
+  },
+  "formation_rule": "同一主题相似情景达到阈值后由整理批次沉淀；此后新情景可强化或修正",
+  "usage": ["appraisal_prior", "expression_style"],
+  "not_a_fact": true,
+  "traceable_to": "来源簇级别；细节证据衰减后倾向仍保留",
+  "confidence_note": "强度为按主题的评测估计，非绝对判断"
+}

@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fairy
+      POSTGRES_PASSWORD: ${FAIRY_DB_PASSWORD:?set FAIRY_DB_PASSWORD}
+      POSTGRES_DB: fairy
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U fairy]
+      interval: 5s
+      retries: 10
+  api:
+    build: .
+    ports: ["127.0.0.1:8000:8000"]
+    environment:
+      FAIRY_TOKEN: ${FAIRY_TOKEN:?set FAIRY_TOKEN}
+      FAIRY_DATABASE_URL: postgresql+psycopg://fairy:${FAIRY_DB_PASSWORD}@db/fairy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 5s
+      retries: 10
+    depends_on:
+      db: {condition: service_healthy}
+  worker:
+    build: .
+    command: [python, -m, fairy.worker]
+    environment:
+      FAIRY_DATABASE_URL: postgresql+psycopg://fairy:${FAIRY_DB_PASSWORD}@db/fairy
+    depends_on:
+      api: {condition: service_healthy}
+volumes:
+  postgres_data:

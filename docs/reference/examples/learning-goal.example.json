@@ -1,0 +1,20 @@
+{
+  "schema_version": "fairy.goal.v1",
+  "id": "goal:study-booking",
+  "source": "knowledge_gap",
+  "question": "预约需要哪些信息，哪些步骤随场地变化？",
+  "state": "candidate",
+  "success_spec": [
+    "cited_steps",
+    "exceptions_identified",
+    "unseen_scenario_pass"
+  ],
+  "budget_ref": "daily_learning",
+  "grant_ref": null,
+  "checkpoint": {
+    "completed_steps": [],
+    "source_cursor": null
+  },
+  "publish_policy": "validated_only",
+  "simulation_is_real_experience": false
+}

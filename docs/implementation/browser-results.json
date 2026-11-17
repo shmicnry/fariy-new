@@ -1,0 +1,25 @@
+{
+  "suite": "isolated local HTTP + Chromium",
+  "status": "passed",
+  "checks": [
+    "token login",
+    "text material registration",
+    "worker checkpoint",
+    "manual assessment",
+    "non-executable acquired knowledge",
+    "source memory and mind projection",
+    "approval executes one internal note",
+    "inert Mac allowlist persistence",
+    "390px no horizontal overflow",
+    "no browser runtime errors"
+  ],
+  "screenshots": [
+    "approval-desktop.png",
+    "chat-mobile-web.png",
+    "learning-desktop.png",
+    "mac-config-desktop.png",
+    "mind-desktop.png"
+  ],
+  "real_model_tested": false,
+  "mac_actions_performed": false
+}

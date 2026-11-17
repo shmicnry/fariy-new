@@ -1,0 +1,34 @@
+{
+  "schema_version": "fairy.card.v1",
+  "id": "card_example",
+  "type": "approval",
+  "business_ref": "goal:study-booking",
+  "revision": 3,
+  "state": "awaiting_choice",
+  "action_digest": "server_computed_digest",
+  "expires_at": "server_generated_rfc3339",
+  "title": "将笔记保存到学习目录？",
+  "summary": "仅本次写入新文件，不覆盖已有内容。",
+  "options": [
+    {
+      "id": "allow_once",
+      "label": "允许本次"
+    },
+    {
+      "id": "choose_directory",
+      "label": "选择目录"
+    },
+    {
+      "id": "reject",
+      "label": "拒绝"
+    }
+  ],
+  "submission_required": [
+    "revision",
+    "action_digest",
+    "choice_id",
+    "idempotency_key"
+  ],
+  "authority": "server_rechecks_scope_and_grant",
+  "offline_authorization": "reject_expired_or_stale"
+}

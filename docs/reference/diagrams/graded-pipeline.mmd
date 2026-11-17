@@ -1,0 +1,75 @@
+flowchart TB
+    IN1(["对话输入：一句话（文字 / 语音）"])
+    IN2(["任务唤醒：到期提醒 · 条件触发"])
+
+    subgraph L1["横轴 ① 接入 · 感知登记"]
+        A1["接入登记：幂等 pending · 30 秒硬超时<br/>说完检测与转写落盘 → 回执① 听到了<br/>【小凌：说完判断在底座模型之前】"]
+        A2{"分级路由【提案】<br/>这句话要走到哪一层？"}
+        A3["快速通道 0：确定性终结【组合既有】<br/>停止 / 打断 → 独立直达执行桥（小凌打断闭环）<br/>越权 / 隐私硬闸 → 规则拒绝（AIRI 审批待办模式）"]
+        A1 --> A2
+    end
+    IN1 --> A1
+    A2 -->|"控制指令 · 硬边界"| A3
+    A2 -->|"常规输入"| C1
+    A3 --> OUTP
+
+    subgraph L2["横轴 ② 意识层工作面 · 受想行识（既有五蕴契约）"]
+        C1["受：PAD 公式有界更新，12 类标签<br/>【Anima 确定性引擎 · 无模型】"]
+        C2["想：轻量概念化 · 主张分类<br/>→ 回执② 理解了"]
+        C3{"终结判定【提案】<br/>能否不用大模型回答？"}
+        C4["快速通道 1：检索直答<br/>浅层卡高置信命中 → 引用卡直答<br/>【dsh-supermemory：检索不依赖生成模型】"]
+        C5["快速通道 2：缓存命中<br/>世界主张版本校验未变 → 引用先前回答"]
+        C6["快速通道 3：轻量表达<br/>问候 / 确认类 → 小参数表达模型＋情绪快照【提案】"]
+        C7["识：心光焦点选择（4 焦点 / 8 候选）· 六桶组装【AIRI 分桶】<br/>identity 桶自第 3 层注入 · 召回材料自第 4 层上桌"]
+        C8["心流：底座大模型调用【全图唯一】<br/>锚定当前问题 · 偏题候选裁剪拉回<br/>调用计入预算与疲劳【小凌：工作桌权限与预算】"]
+        C1 --> C2 --> C3
+        C3 -->|"浅层卡直答"| C4
+        C3 -->|"缓存命中"| C5
+        C3 -->|"轻表达"| C6
+        C3 -->|"复杂任务"| C7
+        C7 --> C8
+    end
+    C4 --> OUTP
+    C5 --> OUTP
+    C6 --> OUTP
+    C8 --> C9["表达：组装回答<br/>行动：执行桥执行"]
+    C9 --> W1["记忆事务提交：谁说的 / 关于谁 / 何时 / 性质四分<br/>→ 回执③ 记住了【小凌记忆纪律】"]
+    W1 --> OUTP(["轮次输出与收尾：表达署真实来源 · 动作回执④<br/>removeWriter 整桶撤除 · 快照版本校验"])
+    IN2 -->|"确定性投递 · 不进心流【既有调度服务】"| OUTP
+
+    GUARD["快速通道护栏【提案】：四回执不降级 · 置信不足立即升级心流<br/>路由与命中记 trace（识海页可观测）· 缓存随修订失效（第 08 章）"]
+    C3 -.- GUARD
+
+    subgraph D1["纵轴 第 1 层 · 前五识 感知接入 ｜ 写入梯度：秒级"]
+        DA1["接入流水：原话 · 转写 · 回执元数据"]
+    end
+    subgraph D2["纵轴 第 2 层 · 意识层 工作面 ｜ 轮次级"]
+        DA2["六桶工作集 · 窗口裁剪 ceil(N×0.9)【AIRI】· tokenizer 双预算【Anima】<br/>快速通道 1/2/3 在此层折返，不向下取材即不调用大模型"]
+    end
+    subgraph D3["纵轴 第 3 层 · 末那识层 自我与关系 ｜ 慢轴：日 0.12 · 月 5 张 · N=3/T=7"]
+        DA3["identity 桶 · 三观卡 · 人物卡与关系边（带来源簇）<br/>PAD 情绪轴更新【Anima 公式 · 无模型】· 跃迁走慢轴预算"]
+    end
+    subgraph D4["纵轴 第 4 层 · 阿赖耶识层 藏识与种子 ｜ 固化最深 τ_a=180 天"]
+        DA4["读口：召回管线（门控 → RRF → 浅层卡优先 → 联查 ≤2）【dsh-supermemory】<br/>写口：记忆事务【小凌】· 异步整理 → 倾向记忆种子 → 浅层卡升降层【Anima】<br/>失效传播：撤回 → tombstone · 派生 · 缓存同批失效<br/>遗忘只降被想起概率，不删原文【小凌】"]
+    end
+    DA1 -.- DA2
+    DA2 -.- DA3
+    DA3 -.- DA4
+    A1 -.->|"写第 1 层接入流水"| DA1
+    C7 -.->|"心光取材（读第 3/4 层）"| DA3
+    W1 -.->|"记忆事务写回"| DA4
+
+    style L1 fill:#F2F9FF,stroke:#9BC4E8
+    style L2 fill:#EAF4FE,stroke:#7FB3E0
+    style D1 fill:#F5FAFF,stroke:#B7CFE8
+    style D2 fill:#E9F2FC,stroke:#9BC4E8
+    style D3 fill:#D9E9F8,stroke:#7FB3E0
+    style D4 fill:#C6DCF2,stroke:#5B9BD5
+    classDef fast fill:#EFFBF3,stroke:#4CAB7D,stroke-dasharray:4 2
+    classDef gate fill:#FFF7E8,stroke:#E8A33D
+    classDef model fill:#FDEBEB,stroke:#D9534F,stroke-width:2.5
+    classDef note fill:#F7F7F7,stroke:#B0B0B0,stroke-dasharray:3 3
+    class A3,C4,C5,C6 fast
+    class A2,C3 gate
+    class C8 model
+    class GUARD note

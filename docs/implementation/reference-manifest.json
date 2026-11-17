@@ -1,0 +1,386 @@
+{
+  "archive_name": "Fairy-v3-设计交付-v4.2 (1).zip",
+  "archive_sha256": "ee2acad6e3307e90d02a56ffe3dec9bc8c9d1038e6e2e5f7c407330a70ea1ff1",
+  "reference_files": [
+    {
+      "path": "Fairy-前端页面设计-v2.3.docx",
+      "sha256": "bf4214645b6fe51260b65c45b50bf9a726b9e5eedb695e4a9faf061efb6241c4",
+      "bytes": 890857
+    },
+    {
+      "path": "Fairy-前端页面设计-v2.3.md",
+      "sha256": "3e4f423216bca5725d5721fa3d3504b72e285d6c6817c36616af64e0f179b09c",
+      "bytes": 39569
+    },
+    {
+      "path": "Fairy-后端设计-v2.2.docx",
+      "sha256": "8356b4964c5b6f0d747c06f533d5954567e6adaaaeaf763d523121607987f671",
+      "bytes": 320454
+    },
+    {
+      "path": "Fairy-后端设计-v2.2.md",
+      "sha256": "97b4c348f126672664c7abcfd538c61e2b2d16234945587e1a3ac4b8d782d552",
+      "bytes": 31081
+    },
+    {
+      "path": "Fairy-系统重构与自主能力设计-v4.2.docx",
+      "sha256": "0e04064c6f0e029ed486a1353c54c76c14dacf142dc5ca79181d7473ed759d04",
+      "bytes": 4996029
+    },
+    {
+      "path": "Fairy-系统重构与自主能力设计-v4.2.md",
+      "sha256": "a076f556faf0f531221de3ae515ede6fbb42fa077423828eb14b086c62bf5869",
+      "bytes": 123387
+    },
+    {
+      "path": "diagrams/architecture.mmd",
+      "sha256": "829630dd6b3a9607816866945b73664749b7e5e8269122399395b99a31119a2a",
+      "bytes": 448
+    },
+    {
+      "path": "diagrams/architecture.png",
+      "sha256": "0f8301cedec241c685d2f5c03f9a1b4f49d27cd5e6a3dce59b4eb217f60dc4ec",
+      "bytes": 63746
+    },
+    {
+      "path": "diagrams/cards.mmd",
+      "sha256": "333da4b110a77fbcbc637e54377e73fb61e25cbb5d82cf24c56168c94aec6f29",
+      "bytes": 452
+    },
+    {
+      "path": "diagrams/cards.png",
+      "sha256": "ea83f045f60eb8cc1ae8cf58bd150526aa45498b9040d6bc683888e75ebf2b35",
+      "bytes": 81398
+    },
+    {
+      "path": "diagrams/evolution.mmd",
+      "sha256": "55b0096fe50fe166a49d547314dde2534ddae87d5898e608af5f604bb6f951c7",
+      "bytes": 477
+    },
+    {
+      "path": "diagrams/evolution.png",
+      "sha256": "896d24f5dbe9fd9ac4386aed80e5fdd2dbc52cd2986f29e28ed83ab0d7b3a309",
+      "bytes": 82996
+    },
+    {
+      "path": "diagrams/graded-pipeline.mmd",
+      "sha256": "30be5f22fb39380ae6fdb62326e321c39a902d3ff2ffebc9f5179180400c36c0",
+      "bytes": 4632
+    },
+    {
+      "path": "diagrams/graded-pipeline.png",
+      "sha256": "74118062bc6887690b28df132f5d8d413a133a3fa87a17488a614e0ab5be24d2",
+      "bytes": 1121125
+    },
+    {
+      "path": "diagrams/growth.mmd",
+      "sha256": "f022fd8b5cf41773467cd4a564f8b5eeb194a813d97af6ecbbbd5bf80357f0ca",
+      "bytes": 597
+    },
+    {
+      "path": "diagrams/growth.png",
+      "sha256": "1133229bda0d19f2f03107bdc8910a196a00b65a23c810523fb0029b20aa3b4d",
+      "bytes": 102172
+    },
+    {
+      "path": "diagrams/learning.mmd",
+      "sha256": "1e11cb1f317c74ad9e9d6949524b2253aef2ecc32cbdf4ce81c70c40a6d601c5",
+      "bytes": 465
+    },
+    {
+      "path": "diagrams/learning.png",
+      "sha256": "79efc883bdde5d9971fb8cfd2753f9211e3aa495698264f20922b5e56dbccc63",
+      "bytes": 78498
+    },
+    {
+      "path": "diagrams/mac.mmd",
+      "sha256": "39ce0afe9db53ad4850a1842abdd49153ed206a5ae2a6713d9bafbd2f17afc78",
+      "bytes": 474
+    },
+    {
+      "path": "diagrams/mac.png",
+      "sha256": "3f4f3657dd0c6fae2ed47d67f9efd3eb16c22afc6c6fbc7530b62b755964ab65",
+      "bytes": 81416
+    },
+    {
+      "path": "diagrams/memory.mmd",
+      "sha256": "e171a49c3e7f4a1a2622d513c2d200e9ddfbc623a875707094e50245884cfde5",
+      "bytes": 491
+    },
+    {
+      "path": "diagrams/memory.png",
+      "sha256": "8402e89c4cc561714c246fe236d4e9a4b84caae4ccf380eace49d5d32dcc4d87",
+      "bytes": 78366
+    },
+    {
+      "path": "diagrams/people-network.mmd",
+      "sha256": "86f0f811f6883d04d92882436270033d49a50eb68d9fb039605c1d25a31d0a12",
+      "bytes": 609
+    },
+    {
+      "path": "diagrams/people-network.png",
+      "sha256": "2e0223b10dfda649622c3f9897bef22219900347c0b8f2720f86a731d1c97efb",
+      "bytes": 109786
+    },
+    {
+      "path": "diagrams/shallow-deep.mmd",
+      "sha256": "cc625d6bc79ffea6a1f7ff9ec015879302eac43ec50010b83a708f03075d5966",
+      "bytes": 600
+    },
+    {
+      "path": "diagrams/shallow-deep.png",
+      "sha256": "84d6e66043bbfadd0b856b1d73503db90f58970006552e379d5534e8b19afd91",
+      "bytes": 108446
+    },
+    {
+      "path": "diagrams/skills.mmd",
+      "sha256": "8c12c476b7a0ade2f578799d97d474995515f682dca536000f81bed74b975c3b",
+      "bytes": 468
+    },
+    {
+      "path": "diagrams/skills.png",
+      "sha256": "598beb55f74db0ad1c93b715e52f5953de86c5715317536c8658faddff879587",
+      "bytes": 79170
+    },
+    {
+      "path": "diagrams/wardrobe.mmd",
+      "sha256": "485b7e80fa7d8965c7a7fd3c8c6cd41414f033d7bb691dc1786b0417944196d1",
+      "bytes": 950
+    },
+    {
+      "path": "diagrams/worldview-safety.mmd",
+      "sha256": "cd14013cd7e3373f6b4552617107ba076d5944342e16d7d68712087c7fc84a59",
+      "bytes": 572
+    },
+    {
+      "path": "diagrams/worldview-safety.png",
+      "sha256": "18b744161a2771ba90116e3fade3fc8a7afe6ff36693351ce4f74f3637e54ee4",
+      "bytes": 112494
+    },
+    {
+      "path": "examples/appearance-outfit.example.json",
+      "sha256": "7fb13c3e1ec9fb292832e54a93844b0679eac4f50ceece35ee1777478316f90d",
+      "bytes": 1135
+    },
+    {
+      "path": "examples/approval-card.example.json",
+      "sha256": "58bdc8df06898e18e17eb27bbbaec7bd250a7616a402e187b7c2eee5631805b8",
+      "bytes": 811
+    },
+    {
+      "path": "examples/disposition.example.json",
+      "sha256": "34e207dc240804d6836110f6cdbb15cd878b340f38d4b1404c71f3f9ae4e3678",
+      "bytes": 755
+    },
+    {
+      "path": "examples/fairy-config.example.json",
+      "sha256": "0b53e31481355d9e46ae13cddf6cad68f588014bd515fcd9744b3004be3c0a45",
+      "bytes": 2102
+    },
+    {
+      "path": "examples/learning-goal.example.json",
+      "sha256": "eaa20f6098d960668f96ed8905fe956ee92f288022b573ccc4877b1d5d3faaee",
+      "bytes": 508
+    },
+    {
+      "path": "examples/people-network.example.json",
+      "sha256": "864ed6151ff770ee32de3f74689cca793c1f0baddb61e56dd4475cf38b8c4160",
+      "bytes": 2503
+    },
+    {
+      "path": "examples/shallow-cards.example.json",
+      "sha256": "b5fd2dc8d3f9331c382ae84d4867683a6d421fb05bb2fbeabc8eba6adf5ff65c",
+      "bytes": 1804
+    },
+    {
+      "path": "examples/skill-manifest.example.json",
+      "sha256": "b1fcbafff1c44038c4b2a2d6d1cd5e7d98be3dfb2830caa30bb81a7bfc427ebe",
+      "bytes": 2389
+    },
+    {
+      "path": "examples/worldview.example.json",
+      "sha256": "a853c3eeb4179bcd1b7389a3f801490084fc4cbbf152711a8871014fc822a18a",
+      "bytes": 1469
+    },
+    {
+      "path": "prototype/cards.html",
+      "sha256": "744340a60a27ef8e8ab3841499cc5ffd63b1d9e59f202f64f2ceaad0341bfccf",
+      "bytes": 16967
+    },
+    {
+      "path": "prototype/desktop-chat.html",
+      "sha256": "65894b8a319207f8d5b5dad2b63a4497360ee5d38406de47f1bf1e520f148dee",
+      "bytes": 12052
+    },
+    {
+      "path": "prototype/desktop-pet.html",
+      "sha256": "ed41f5ba0bc44e99f8983353ccaf66333ae076991327d382feec85689fcd30a4",
+      "bytes": 11127
+    },
+    {
+      "path": "prototype/evolution.html",
+      "sha256": "d7e5966fd15c2e6f21c9780c91f158aab141b426509231e7c89a7a45c91955bd",
+      "bytes": 15213
+    },
+    {
+      "path": "prototype/fairy.png",
+      "sha256": "1973465fc906f088a3e2e749f4afa62aa1127ee43ccb046a2be7d51bb9fa81b0",
+      "bytes": 2356326
+    },
+    {
+      "path": "prototype/flows.html",
+      "sha256": "98b3678afa476e62d3815474c4763c16d912ebde689aa790b344ad65a1aea304",
+      "bytes": 15063
+    },
+    {
+      "path": "prototype/index.html",
+      "sha256": "014f640e75ed4c312a1dc68f8614e2f61a8d28f7524236a83bcc1c428bc7968f",
+      "bytes": 57
+    },
+    {
+      "path": "prototype/learning.html",
+      "sha256": "c70ffee2ae379a84e3aab869c21802fa28e796e579031c0ec674f0bd7b0a83b8",
+      "bytes": 18930
+    },
+    {
+      "path": "prototype/m-chat.html",
+      "sha256": "dd0897867495fae02282aba942cf1147d2ce22805a88fb79ab9b85eb8a011c43",
+      "bytes": 11460
+    },
+    {
+      "path": "prototype/m-evidence.html",
+      "sha256": "44ec8c6fccaad0a0e62fc4e021183a73a00a86665eaf6d772c27f5fbb5934cb6",
+      "bytes": 11027
+    },
+    {
+      "path": "prototype/m-video.html",
+      "sha256": "21052a937406c0084c625a69c36b1fe70514d579c66649575e86c4fa140287f9",
+      "bytes": 10729
+    },
+    {
+      "path": "prototype/mac.html",
+      "sha256": "28128f9203473d2d2552b61fb6c135e20614d031e34e1dc2ab00b1bc6767c911",
+      "bytes": 14986
+    },
+    {
+      "path": "prototype/mind.html",
+      "sha256": "8d2617e0348b7800fc34359cd22ab87fe6eb0e86b520d247eccf9967aeee8233",
+      "bytes": 26539
+    },
+    {
+      "path": "prototype/overview.html",
+      "sha256": "36c198aa3072007455a45e5e74aea9c8e62bd44ca7f968c78c1d7766a269d57e",
+      "bytes": 15287
+    },
+    {
+      "path": "prototype/pet.html",
+      "sha256": "5441ec4309914caf657a4ce3530b394241fa2c8e5ebd2b34f387fe319f079937",
+      "bytes": 18276
+    },
+    {
+      "path": "prototype/skills.html",
+      "sha256": "b39bdfcd4606627d78bf228a4d18608eb2251bb594ccecf993caa8244c3ef574",
+      "bytes": 14543
+    },
+    {
+      "path": "prototype/support-files.html",
+      "sha256": "c742f9f24e46c744a5a12858a3e3322c9a6540febda8edd351877316f9cd2664",
+      "bytes": 7662
+    },
+    {
+      "path": "prototype/support-search.html",
+      "sha256": "64a064409305c5ed1f7d18e9836d751ffc1760b14a81c25bd4a016df86ce2776",
+      "bytes": 7565
+    },
+    {
+      "path": "prototype/support-settings.html",
+      "sha256": "63fd6dcbdaa5d92e64eb18618bd026d3762803e5abbc4904545473e32600d25c",
+      "bytes": 7869
+    },
+    {
+      "path": "prototype/world.html",
+      "sha256": "d7c7ca50ec9431cd95b511d2314fa57a76c27f54df5197a644e49d58c116ea2d",
+      "bytes": 15764
+    },
+    {
+      "path": "screenshots/cards.png",
+      "sha256": "c12b41232859ccfa8f5cdbd2c29f6eb494373cb77644d081957863f275399cd7",
+      "bytes": 227503
+    },
+    {
+      "path": "screenshots/desktop-chat.png",
+      "sha256": "ffd155dece9bca9d276e4414ba7d16672c7c842541da47237bc462fa087eb682",
+      "bytes": 294674
+    },
+    {
+      "path": "screenshots/desktop-pet.png",
+      "sha256": "3e1418e625e3f70eae53934255bb1ca87f0ebeefd05146d383814f96be9f5d42",
+      "bytes": 156233
+    },
+    {
+      "path": "screenshots/evolution.png",
+      "sha256": "c1c443cc9cdaaed71d5c39b34b388dcd016774f4a3e48bc68434660c5ebce2cf",
+      "bytes": 150442
+    },
+    {
+      "path": "screenshots/flows.png",
+      "sha256": "95eef31bd849e2d96e6911015e2b2206d49413a86f6e1962bd0b846dfce7a5de",
+      "bytes": 165270
+    },
+    {
+      "path": "screenshots/learning.png",
+      "sha256": "2391dad93429ae50441e573aeff798dae48463e26d95053200b4cf4d1efb69e3",
+      "bytes": 301755
+    },
+    {
+      "path": "screenshots/m-chat.png",
+      "sha256": "c237aeca9b3e87afb3259e6cd36465c4cc5a51af885f577c0ea6bdecf0347dfc",
+      "bytes": 56536
+    },
+    {
+      "path": "screenshots/m-evidence.png",
+      "sha256": "d16419bf1a623f1ccd0f06f7d8a32fe00df2c42ec3375eedec6a714a1659ca32",
+      "bytes": 59627
+    },
+    {
+      "path": "screenshots/m-video.png",
+      "sha256": "9bded6283923d256526e78a388634b2a8bb1fb097b65ea7d1c0519d6fb3d2e56",
+      "bytes": 273927
+    },
+    {
+      "path": "screenshots/mac.png",
+      "sha256": "70fd82f882bb84b48b150ac1163cd02cb91d442352b3b5bcc3b85dd415006a65",
+      "bytes": 150814
+    },
+    {
+      "path": "screenshots/mind.png",
+      "sha256": "57a16d613c08773fbe015a8b42a094a0e08fc438f1941799b8e4066a2e85a9a5",
+      "bytes": 382637
+    },
+    {
+      "path": "screenshots/overview.png",
+      "sha256": "884a9668d952fe9151705eb75f967be3581fce6e47dc6ec2577159b294a733ba",
+      "bytes": 167490
+    },
+    {
+      "path": "screenshots/pet.png",
+      "sha256": "c04c4706741584b469ddd5945faab149608a0c4947f1c85d288745d272699415",
+      "bytes": 343776
+    },
+    {
+      "path": "screenshots/skills.png",
+      "sha256": "9cd84985755339bdbad06ebccd79ba67616e6e86222c9ccf5badbbab8b5ebd19",
+      "bytes": 133739
+    },
+    {
+      "path": "screenshots/world.png",
+      "sha256": "ef54b9859d0dc9fd94b22b29f189c41549777bdcdca67f55bbe363ae21d4b3a1",
+      "bytes": 181626
+    },
+    {
+      "path": "阅读说明.md",
+      "sha256": "1fdf808f2c4b8dc3af32dc4e3752db0b90aa2fe4106e49c43255c29fec06bc37",
+      "bytes": 16154
+    }
+  ]
+}

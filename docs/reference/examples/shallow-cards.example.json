@@ -1,0 +1,74 @@
+{
+  "note": "拟实施契约示例；enabled=false，浅层卡为派生视图，整卡驳回时原文仍在深层",
+  "cards": [
+    {
+      "card_id": "sc-identity-family-name",
+      "kind": "identity_fact",
+      "topic": "主人的名字",
+      "when": null,
+      "who": [
+        "p-user"
+      ],
+      "where": null,
+      "summary": "主人的姓名（示例占位）",
+      "importance": 1.0,
+      "pinned": true,
+      "source_clusters": [
+        "sc-2026-10-account-1"
+      ],
+      "deep_links": [
+        "fact-2026-10-account-name"
+      ],
+      "score": null
+    },
+    {
+      "card_id": "sc-common-multiplication",
+      "kind": "common_fact",
+      "topic": "九九乘法口诀",
+      "when": null,
+      "who": null,
+      "where": null,
+      "summary": "3×7=21 等乘法口诀表（成长期学习）",
+      "importance": 1.0,
+      "pinned": true,
+      "source_clusters": [
+        "sc-2026-11-growth-math-1"
+      ],
+      "deep_links": [],
+      "score": null
+    },
+    {
+      "card_id": "sc-event-trip-plan",
+      "kind": "event",
+      "topic": "全家去海边过周末的约定",
+      "when": "2026-12-20",
+      "who": [
+        "p-user",
+        "p-mom",
+        "p-brother"
+      ],
+      "where": "海边",
+      "summary": "12 月 20 日全家去海边过周末，哥哥负责订票",
+      "importance": 0.8,
+      "pinned": false,
+      "source_clusters": [
+        "sc-2026-11-daily-7"
+      ],
+      "deep_links": [
+        "ep-2026-11-14-trip-talk-1",
+        "ep-2026-11-15-trip-talk-2"
+      ],
+      "score": 0.74
+    }
+  ],
+  "policy": {
+    "card_cap": 2000,
+    "promote_threshold": 0.6,
+    "sediment_threshold": 0.2,
+    "tau_a_days": 180,
+    "reinforce_beta": 0.1,
+    "expand_per_turn": 2,
+    "expand_chars": 600
+  },
+  "enabled": false
+}

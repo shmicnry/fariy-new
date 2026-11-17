@@ -1,0 +1,34 @@
+{
+  "schema_version": "fairy.appearance.v1",
+  "outfit_state": {
+    "outfit_id": "outfit:2026-11-16-01",
+    "base_asset_id": "fairy.original",
+    "outfit_version": 7,
+    "layers": {
+      "hairstyle": "asset:hair.c5ecaa",
+      "outfit": "asset:wear.2f31b0",
+      "accessory": ["asset:acc.91d002"],
+      "makeup": "asset:make.b1f7"
+    },
+    "surfaces": ["pet", "chat", "video"],
+    "changed_by": "fairy_auto_styled",
+    "reason_ref": "styling_proposal:8c22",
+    "effective_at": "server_generated_rfc3339"
+  },
+  "styling_proposal": {
+    "id": "styling_proposal:8c22",
+    "trigger": "daily_first_appearance",
+    "emotion_snapshot_ref": "pad:2026-11-16T08:00:00+08:00",
+    "context": { "time_of_day": "morning", "weather": "cloudy", "schedule": "casual" },
+    "candidates": 2,
+    "reason": "今天多云偏凉，心情平稳，选了暖色针织和发带。",
+    "policy": "auto",
+    "boundary": "only_owned_assets",
+    "generate_new_assets": false
+  },
+  "wardrobe_preferences": {
+    "soft_constraints": ["偏暖色", "少配饰"],
+    "forbidden": ["上游角色元素"],
+    "identity_core_override": false
+  }
+}
