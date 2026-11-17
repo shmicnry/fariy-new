@@ -78,6 +78,22 @@ def test_disputed_source_cannot_be_acquired(env):
         app.state.service.acquire(course["id"], "unsafe")
 
 
+def test_malformed_source_expiry_fails_closed(env):
+    app, c, svc, course, source = prepared(env)
+    with app.state.db.tx() as session:
+        material = svc.get(session, source["id"], "material")
+        payload = json.loads(material.payload)
+        payload["quality"] = {
+            "rating": "primary",
+            "reason": "测试损坏的到期字段",
+            "expires_at": "not-a-timestamp",
+        }
+        material.payload = json.dumps(payload)
+        assert svc.source_eligible(material) is False
+    listed = c.get("/v2/learning/sources").json()
+    assert listed[0]["source_eligible"] is False
+
+
 def test_final_course_confirmation_requires_exact_source_evidence(env):
     app, c, svc, course, _ = prepared(env)
     practice = svc.practice(

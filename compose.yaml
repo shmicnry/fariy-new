@@ -13,7 +13,7 @@ services:
   api:
     build: .
     restart: unless-stopped
-    ports: ["127.0.0.1:8000:8000"]
+    ports: ["127.0.0.1:8010:8000"]
     environment:
       FAIRY_TOKEN: ${FAIRY_TOKEN:?set FAIRY_TOKEN}
       FAIRY_DATABASE_URL: postgresql+psycopg://fairy:${FAIRY_DB_PASSWORD}@db/fairy

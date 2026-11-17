@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from datetime import datetime, timedelta, timezone
@@ -232,13 +233,18 @@ class SkillService(Service):
                 },
                 "running",
             )
+            invocation_id = invocation.id
         try:
             if data["implementation"] == "mac_status":
-                result = MacBridge(self).status()
+                result = await asyncio.to_thread(MacBridge(self).status)
             elif data["implementation"] == "mac_ax_tree":
-                result = MacBridge(self).ax_tree(body.query.strip() or None)
+                result = await asyncio.to_thread(
+                    MacBridge(self).ax_tree, body.query.strip() or None
+                )
             elif data["implementation"] == "mac_open_app":
-                result = MacBridge(self).open_app(body.query.strip())
+                result = await asyncio.to_thread(
+                    MacBridge(self).open_app, body.query.strip()
+                )
             elif data["implementation"] == "learning_search":
                 from .cognition import relevance
 
@@ -329,20 +335,47 @@ class SkillService(Service):
             else:
                 fail(409, "skill_implementation_not_available")
             with self.db.tx() as session:
+                invocation = self.get(session, invocation_id, "skill_invocation")
                 invocation.status = "completed"
                 invocation.revision += 1
                 invocation.payload = json.dumps(
                     {**json.loads(invocation.payload), "result": result}
                 )
+                invocation_result = view(invocation)
                 self.db.emit(
                     session,
                     "owner",
                     "skill.invoked",
                     {"skill_id": skill_id, "invocation_id": invocation.id},
                 )
-            return {"invocation": view(invocation), "result": result}
-        except Exception:
+            return {"invocation": invocation_result, "result": result}
+        except Exception as exc:
+            detail = getattr(exc, "detail", None)
+            error = (
+                detail
+                if isinstance(detail, str)
+                and 0 < len(detail) <= 100
+                and all(character.islower() or character.isdigit() or character == "_" for character in detail)
+                else "skill_invocation_failed"
+            )
             with self.db.tx() as session:
+                invocation = self.get(session, invocation_id, "skill_invocation")
                 invocation.status = "failed"
                 invocation.revision += 1
+                payload = json.loads(invocation.payload)
+                payload.update(
+                    error=error,
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                )
+                invocation.payload = json.dumps(payload)
+                self.db.emit(
+                    session,
+                    "owner",
+                    "skill.invocation_failed",
+                    {
+                        "skill_id": skill_id,
+                        "invocation_id": invocation.id,
+                        "error": error,
+                    },
+                )
             raise

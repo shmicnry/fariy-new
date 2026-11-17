@@ -100,10 +100,16 @@ struct WorkerStatus: Codable {
 actor FairyAPI {
     private let baseURL: URL
     private let token: String
+    private let session: URLSession
 
     init(baseURL: URL, token: String) {
         self.baseURL = baseURL
         self.token = token
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 330
+        configuration.timeoutIntervalForResource = 360
+        configuration.waitsForConnectivity = true
+        self.session = URLSession(configuration: configuration)
     }
 
     private func request(_ path: String, method: String = "GET", body: Data? = nil) async throws -> Data {
@@ -124,7 +130,7 @@ actor FairyAPI {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue(UUID().uuidString, forHTTPHeaderField: "Idempotency-Key")
         }
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw URLError(.badServerResponse)
         }

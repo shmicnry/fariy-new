@@ -5,6 +5,13 @@ const assert = require('node:assert/strict');
 
 const base = process.env.FAIRY_TEST_URL || 'http://127.0.0.1:18860';
 const token = process.env.FAIRY_TOKEN;
+const workerState = process.env.FAIRY_STATE_DIR;
+const workerDatabase = process.env.FAIRY_DATABASE_URL;
+if (!workerState || !workerDatabase) {
+    throw new Error(
+        'P3-P5 browser acceptance requires explicit FAIRY_STATE_DIR and FAIRY_DATABASE_URL'
+    );
+}
 const jsonHeaders = {
     Authorization: 'Bearer ' + token,
     'Content-Type': 'application/json',
@@ -77,13 +84,22 @@ async function api(path, method = 'GET', body) {
         title: '自主候选用例',
         text: '光合作用需要光照。',
     });
-    const worker = spawnSync('.venv/bin/python', ['-m', 'fairy.worker', '--once'], {
-        env: process.env,
-        encoding: 'utf8',
-    });
-    assert.equal(worker.status, 0, worker.stderr);
-    const course = (await api('learning/courses')).find(item => item.id === material.course.id);
-    await fetch(base + '/v2/learning/courses/' + course.id + '/assess', {
+    let course;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+        const worker = spawnSync('.venv/bin/python', ['-m', 'fairy.worker', '--once'], {
+            env: {
+                ...process.env,
+                FAIRY_STATE_DIR: workerState,
+                FAIRY_DATABASE_URL: workerDatabase,
+            },
+            encoding: 'utf8',
+        });
+        assert.equal(worker.status, 0, worker.stderr);
+        course = (await api('learning/courses')).find(item => item.id === material.course.id);
+        if (course?.stage === 'awaiting_assessment') break;
+    }
+    assert.equal(course?.stage, 'awaiting_assessment', 'worker did not finish the acceptance course');
+    const assessment = await fetch(base + '/v2/learning/courses/' + course.id + '/assess', {
         method: 'POST',
         headers: jsonHeaders,
         body: JSON.stringify({
@@ -92,6 +108,7 @@ async function api(path, method = 'GET', body) {
             evidence: '需要更多练习',
         }),
     });
+    assert.ok(assessment.ok, await assessment.text());
 
     await page.locator('#nav a[href="#evolution"]').click();
     await page.getByLabel('启用自主候选').check();

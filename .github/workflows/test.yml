@@ -1,8 +1,25 @@
 name: Core regression
 on: [push, pull_request]
 jobs:
-  sqlite:
+  core:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fairy
+          POSTGRES_PASSWORD: fairy
+          POSTGRES_DB: fairy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fairy -d fairy_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      FAIRY_TEST_POSTGRES_URL: postgresql+psycopg://fairy:fairy@127.0.0.1:5432/fairy_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

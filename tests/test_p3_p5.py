@@ -71,6 +71,7 @@ def test_builtin_skill_install_grant_invoke_and_disable(env):
         json={"query": ""},
     )
     assert invocation.status_code == 200
+    assert invocation.json()["invocation"]["status"] == "completed"
     assert invocation.json()["result"]["arbitrary_shell"] is False
     disabled = client.post(
         "/v2/skills/registry/" + status_skill["id"] + "/disable"
@@ -116,6 +117,36 @@ def test_mac_files_realpath_confinement(env, tmp_path):
     )
     assert client.get("/v2/mac/status").json()["execute_action_available"] is False
     assert client.get("/v2/mac/apps").json()["launch_available"] is False
+
+
+def test_config_allowlists_are_bounded_and_normalized(env):
+    app, client = env
+    base = {"revision": 0}
+    assert (
+        client.put(
+            "/v2/config",
+            json={**base, "mac_allowed_paths": ["relative/path"]},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.put(
+            "/v2/config",
+            json={**base, "mac_allowed_apps": ["TextEdit\n--help"]},
+        ).status_code
+        == 422
+    )
+    configured = client.put(
+        "/v2/config",
+        json={
+            **base,
+            "mac_allowed_apps": [" TextEdit ", "TextEdit"],
+            "mac_allowed_paths": ["/tmp", "/tmp"],
+        },
+    )
+    assert configured.status_code == 200, configured.text
+    assert configured.json()["mac_allowed_apps"] == ["TextEdit"]
+    assert configured.json()["mac_allowed_paths"] == ["/tmp"]
 
 
 def test_mac_open_app_requires_all_scopes_and_has_no_arbitrary_arguments(env):
@@ -407,6 +438,45 @@ def test_expired_skill_grant_cannot_invoke(env):
     ).status_code == 409
 
 
+def test_failed_skill_invocation_is_persisted_and_audited(env, monkeypatch):
+    app, client = env
+    registry = client.get("/v2/skills/registry").json()
+    skill = next(
+        item for item in registry if item["implementation"] == "mac_status"
+    )
+    installed = client.post(
+        "/v2/skills/registry/" + skill["id"] + "/install"
+    ).json()
+    assert client.post(
+        "/v2/skills/registry/" + skill["id"] + "/grant",
+        json={
+            "revision": installed["revision"],
+            "permissions": ["mac.read_status"],
+            "expires_minutes": 5,
+        },
+    ).status_code == 200
+
+    def denied(_bridge):
+        from fairy.service import fail
+
+        fail(503, "mac_status_failed")
+
+    monkeypatch.setattr("fairy.skills.MacBridge.status", denied)
+    result = client.post(
+        "/v2/skills/registry/" + skill["id"] + "/invoke",
+        json={"query": ""},
+    )
+    assert result.status_code == 503
+    invocation = app.state.service.list("skill_invocation")[-1]
+    assert invocation["status"] == "failed"
+    assert invocation["error"] == "mac_status_failed"
+    assert any(
+        event["type"] == "skill.invocation_failed"
+        and event["payload"]["invocation_id"] == invocation["id"]
+        for event in client.get("/v2/events").json()
+    )
+
+
 def test_isolated_evolution_lab_never_changes_runtime(env):
     app, client = env
     body = {
@@ -506,7 +576,9 @@ def test_pwa_shell_is_served_and_does_not_cache_api(env):
     assert worker.status_code == 200
     assert worker.headers["service-worker-allowed"] == "/"
     assert "url.pathname.startsWith('/v2/')" in worker.text
-    assert "fairy-shell-v10" in worker.text
+    assert "response.ok" in worker.text
+    assert "event.request.mode === 'navigate'" in worker.text
+    assert "fairy-shell-v11" in worker.text
 
 
 def test_local_voice_status_and_tts(env, monkeypatch):

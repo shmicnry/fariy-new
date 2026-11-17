@@ -1,4 +1,4 @@
-const CACHE = 'fairy-shell-v10';
+const CACHE = 'fairy-shell-v11';
 const SHELL = [
   '/',
   '/assets/style.css',
@@ -33,10 +33,17 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        const copy = response.clone();
-        caches.open(CACHE).then(cache => cache.put(event.request, copy));
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE).then(cache => cache.put(event.request, copy));
+        }
         return response;
       })
-      .catch(() => caches.match(event.request).then(response => response || caches.match('/')))
+      .catch(async () => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        if (event.request.mode === 'navigate') return caches.match('/');
+        return Response.error();
+      })
   );
 });

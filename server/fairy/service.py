@@ -118,7 +118,13 @@ class Service:
         if quality.get("rating") in ("disputed", "rejected"):
             return False
         expiry = quality.get("expires_at")
-        return not expiry or datetime.fromisoformat(expiry) > datetime.now(timezone.utc)
+        if not expiry:
+            return True
+        try:
+            return datetime.fromisoformat(expiry) > datetime.now(timezone.utc)
+        except (TypeError, ValueError):
+            # Malformed retention metadata must fail closed instead of breaking every read path.
+            return False
 
     def recall(self, query, principal="confirmed"):
         if principal != "confirmed":

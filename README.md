@@ -4,6 +4,8 @@
 
 最新阶段：[P3–P5 可运行纵切交付与验证](docs/implementation/P3-P5-纵切交付与验证.md)。新增技能生命周期、受限 Mac 桥、iPhone PWA、SwiftUI 双平台页面、自主候选预算与隔离进化实验。
 
+最新全量审计：[P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)。修复技能调用状态未持久化、自主页覆盖 Mac 授权、原生请求超时、PWA 离线回退、配置边界、Compose 端口和 CI PostgreSQL 缺口；PostgreSQL 全量回归 **128 passed**。
+
 最新审计：[P2缺漏审计与修复](docs/implementation/P2审计修复.md)。修复文件幂等、学习结论撤销、精确最终依据、来源失效、测验取消和撤回入口等问题；最终在隔离 Postgres 16 上 **108 项回归全部通过**。
 
 最新P2：[学习、来源与世界知识闭环](docs/implementation/P2学习与世界知识.md)。新增链接登记、来源复核、带出处的知识主张、练习评分和效果记录；真实公网采集在当前DNS环境下受阻，详见限制。
@@ -130,13 +132,14 @@ python scripts/export_contract.py
 python scripts/acceptance_ollama.py
 ```
 
-P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境测试跳过；加入常驻服务、同步、语音、OCR、语义检索和原生操作后，在隔离 Postgres 16 上 **125 项全部通过**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
+P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境测试跳过；加入常驻服务、同步、语音、OCR、语义检索、原生操作与 P3–P5 缺漏修复后，在隔离 Postgres 16 上 **128 项全部通过**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
 
 - [P1 实施与验证记录](docs/implementation/P1-模型与记忆闭环.md)
 - [Ollama 实测结果](docs/implementation/p1-ollama-acceptance.json)
 - [浏览器实测结果](docs/implementation/p1-browser-results.json)
 - [P1 运行截图](docs/implementation/screenshots/p1/)
 - [P3–P5 纵切记录](docs/implementation/P3-P5-纵切交付与验证.md)
+- [P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)
 - [P3–P5 浏览器结果](docs/implementation/p3-p5-browser-results.json)
 - [UI 控件审查与优化](docs/implementation/UI控件审查与优化.md)
 - [Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)

@@ -8,7 +8,7 @@ from typing import Literal
 from fastapi import FastAPI, Depends, Header, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from sqlalchemy import select
 from .store import Store, Event, now, view
 from .service import fail
@@ -126,6 +126,39 @@ class Config(Strict):
     autonomy_enabled: bool = False
     autonomy_daily_minutes: int = Field(default=30, ge=0, le=240)
     autonomy_daily_items: int = Field(default=10, ge=0, le=100)
+
+    @field_validator("mac_allowed_apps")
+    @classmethod
+    def valid_app_allowlist(cls, value):
+        cleaned = []
+        for item in value:
+            item = item.strip()
+            if (
+                not item
+                or len(item) > 500
+                or any(ord(character) < 32 or ord(character) == 127 for character in item)
+            ):
+                raise ValueError("invalid_allowed_application")
+            if item not in cleaned:
+                cleaned.append(item)
+        return cleaned
+
+    @field_validator("mac_allowed_paths")
+    @classmethod
+    def valid_path_allowlist(cls, value):
+        cleaned = []
+        for item in value:
+            item = item.strip()
+            if (
+                not item
+                or len(item) > 2000
+                or any(ord(character) < 32 or ord(character) == 127 for character in item)
+                or not Path(item).is_absolute()
+            ):
+                raise ValueError("allowed_paths_must_be_absolute")
+            if item not in cleaned:
+                cleaned.append(item)
+        return cleaned
 
 
 class CandidateChoice(Strict):

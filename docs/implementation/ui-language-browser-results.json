@@ -11,6 +11,7 @@
     "chat stops following after upward scroll",
     "jump-to-latest behavior",
     "IME composition does not submit",
+    "autonomy settings preserve Mac execution scope",
     "iPhone layout has no horizontal overflow",
     "no browser runtime errors"
   ],

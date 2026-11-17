@@ -619,11 +619,13 @@ struct CourseDetailView: View {
             Section("人工验证") {
                 TextField("逐字原文依据", text: $evidence, axis: .vertical)
                     .lineLimit(3...8)
-                Button("记录为通过") {
-                    Task { _ = await model.assess(course, passed: true, evidence: evidence) }
-                }
-                Button("仍需练习") {
-                    Task { _ = await model.assess(course, passed: false, evidence: evidence) }
+                HStack {
+                    Button("记录为通过") {
+                        Task { _ = await model.assess(course, passed: true, evidence: evidence) }
+                    }
+                    Button("仍需练习") {
+                        Task { _ = await model.assess(course, passed: false, evidence: evidence) }
+                    }
                 }
                 .disabled(evidence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }

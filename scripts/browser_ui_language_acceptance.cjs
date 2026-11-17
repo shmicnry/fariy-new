@@ -131,6 +131,20 @@ async function request(path, method = 'GET', body) {
     assert.equal(await composer.inputValue(), '中文输入法组合态');
     assert.equal(await page.locator('#error').innerText(), '');
 
+    const currentConfigs = await request('config');
+    const currentConfig = currentConfigs[0] || {revision: 0};
+    await request('config', 'PUT', {
+        ...currentConfig,
+        revision: currentConfig.revision,
+        mac_execute: true,
+        mac_allowed_apps: ['TextEdit'],
+    });
+    await page.locator('#nav a[href="#evolution"]').click();
+    await page.getByRole('button', {name: '保存自主预算', exact: true}).click();
+    const updatedConfig = (await request('config'))[0];
+    assert.equal(updatedConfig.mac_execute, true);
+    assert.deepEqual(updatedConfig.mac_allowed_apps, ['TextEdit']);
+
     await page.setViewportSize({width: 390, height: 844});
     assert.equal(await resizer.isVisible(), false);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
@@ -151,6 +165,7 @@ async function request(path, method = 'GET', body) {
                 'chat stops following after upward scroll',
                 'jump-to-latest behavior',
                 'IME composition does not submit',
+                'autonomy settings preserve Mac execution scope',
                 'iPhone layout has no horizontal overflow',
                 'no browser runtime errors',
             ],
