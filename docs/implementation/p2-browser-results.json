@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "checks": [
+    "file upload",
+    "worker",
+    "practice with citation",
+    "source search",
+    "no runtime errors"
+  ],
+  "synthetic_data": true
+}

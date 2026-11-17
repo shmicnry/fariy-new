@@ -171,10 +171,61 @@ async function render() {
             await render()
         }));
         p.append(el('p', '当前支持文字；视频、音乐、URL 抓取尚未接入。运行 worker 后进入人工验证，不自动宣称掌握。', 'muted'));
+        const uploadPanel = panel('学习文件与来源检索');
+        const file = el('input');
+        file.type = 'file';
+        file.accept = '.txt,.md';
+        file.setAttribute('aria-label', '选择文字文件');
+        uploadPanel.append(file, button('上传并学习', async () => {
+            const selected = file.files[0];
+            if (!selected) throw Error('请选择 TXT 或 Markdown 文件');
+            if (selected.size > 1048576) throw Error('文件上限为 1 MiB');
+            const bytes = new Uint8Array(await selected.arrayBuffer());
+            let binary = '';
+            for (const b of bytes) binary += String.fromCharCode(b);
+            await api('learning/files', 'POST', {
+                filename: selected.name,
+                content_base64: btoa(binary)
+            });
+            await render();
+        }));
+        const query = el('input');
+        query.placeholder = '检索学习资料关键词';
+        const matches = el('div');
+        uploadPanel.append(query, button('检索资料', async () => {
+            const data = await api('learning/search?q=' + encodeURIComponent(query.value));
+            matches.replaceChildren();
+            for (const item of data.results) matches.append(el('p', item.text), el('small', '原文位置 ' + item.start + '–' + item.end + '；来源 ' + item.source_ids[0]));
+            if (!data.results.length) matches.append(el('p', '没有匹配到有效资料'))
+        }), matches);
         for (const course of await api('learning/courses')) {
             const cp = panel(course.title);
             records(cp, [course]);
+            if (course.total_chunks) cp.append(el('p', '已阅读 ' + course.read_chunks + ' / ' + course.total_chunks + ' 块（不代表掌握）', 'muted'));
+            const citations = el('div');
+            cp.append(button('查看阅读出处', async () => {
+                citations.replaceChildren();
+                for (const part of await api('learning/courses/' + course.id + '/chunks')) citations.append(el('p', part.text), el('small', '原文字符位置 ' + part.start + '–' + part.end))
+            }), citations);
+
             if (['awaiting_assessment', 'needs_practice'].includes(course.stage)) {
+                const answer = el('textarea');
+                answer.placeholder = '练习答案';
+                const evidence = el('textarea');
+                evidence.placeholder = '用于支持答案的原文摘录';
+                cp.append(answer, evidence, button('提交有出处的练习', async () => {
+                    await api('learning/courses/' + course.id + '/practice', 'POST', {
+                        revision: course.revision,
+                        answer: answer.value,
+                        evidence: evidence.value
+                    });
+                    await render()
+                }));
+                const practiceList = el('div');
+                cp.append(button('查看练习记录', async () => {
+                    practiceList.replaceChildren();
+                    for (const item of await api('learning/courses/' + course.id + '/practice')) practiceList.append(el('p', item.answer), el('blockquote', item.evidence_quote), el('small', '未自动评分，需人工核对'))
+                }), practiceList);
                 const proof = el('textarea');
                 proof.placeholder = '记录你用于验证的练习及实际结果';
                 cp.append(proof, button('记录通过', async () => {

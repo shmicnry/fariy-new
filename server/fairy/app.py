@@ -15,6 +15,7 @@ from .service import fail
 from .memories import MemoryService
 from .model_settings import ModelSettings, ModelConfig
 from .models import ModelRouter
+from .learning import LearningService
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -53,6 +54,17 @@ class Memory(Text):
 
 class Material(Text):
     title: str = Field(min_length=1, max_length=160)
+
+
+class FileMaterial(Strict):
+    filename: str = Field(min_length=1, max_length=160)
+    content_base64: str = Field(min_length=1, max_length=1400000)
+
+
+class Practice(Strict):
+    revision: int = Field(ge=1)
+    answer: str = Field(min_length=1, max_length=8000)
+    evidence: str = Field(min_length=1, max_length=4000)
 
 
 class Card(Text):
@@ -272,6 +284,51 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     @api.post("/learning/materials")
     def material(body: Material, k=Depends(key)):
         return service.material(body.title, body.text, k)
+
+    @api.post("/learning/files")
+    def file_material(body: FileMaterial, k=Depends(key)):
+        return LearningService(db).ingest(body.filename, body.content_base64, k)
+
+    @api.get("/learning/courses/{id}/chunks")
+    def course_chunks(id: str):
+        with db.sessions() as s:
+            service.get(s, id, "course")
+        return sorted(
+            [r for r in service.list("learning_chunk") if r["course_id"] == id],
+            key=lambda r: r["index"],
+        )
+
+    @api.post("/learning/courses/{id}/practice")
+    def practice(id: str, body: Practice, k=Depends(key)):
+        return LearningService(db).practice(
+            id, body.revision, body.answer, body.evidence, k
+        )
+
+    @api.get("/learning/courses/{id}/practice")
+    def practices(id: str):
+        with db.sessions() as s:
+            service.get(s, id, "course")
+        return [r for r in service.list("practice") if r["course_id"] == id]
+
+    @api.get("/learning/search")
+    def search_learning(q: str = Query(min_length=1, max_length=1000)):
+        from .cognition import relevance
+
+        results = []
+        with db.sessions() as s:
+            for row in service.rows(s, "learning_chunk"):
+                if row.status != "active":
+                    continue
+                d = json.loads(row.payload)
+                if any(service.get(s, id).status != "active" for id in d["source_ids"]):
+                    continue
+                score = relevance(q, d["text"])
+                if score > 0:
+                    results.append(dict(view(row), relevance=score))
+        return {
+            "results": sorted(results, key=lambda r: (-r["relevance"], r["id"]))[:20],
+            "retrieval_mode": "lexical_chunks",
+        }
 
     @api.get("/learning/courses")
     def courses():

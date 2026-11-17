@@ -90,12 +90,10 @@ class Store:
             def configure(db, _):
                 db.execute("PRAGMA foreign_keys=ON")
 
-        Base.metadata.create_all(self.engine)
+        from .migrations import migrate
+
+        migrate(self.engine, Base.metadata)
         self.sessions = sessionmaker(self.engine, expire_on_commit=False)
-        # Single owner for the initial release; the token, never request data, binds this scope.
-        with self.sessions.begin() as s:
-            if not s.get(ScopeLock, "owner"):
-                s.add(ScopeLock(id="owner", version=0))
 
     @contextmanager
     def tx(self, scope="owner"):

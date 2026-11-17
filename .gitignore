@@ -11,3 +11,5 @@ var/
 .DS_Store
 build/
 *.egg-info/
+
+*.migrate.lock

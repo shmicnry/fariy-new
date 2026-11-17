@@ -28,23 +28,50 @@ def tick(db):
                 job.status = "cancelled"
                 continue
             c = json.loads(course.payload)
-            # Bounded local extraction is a durable reading checkpoint, not proof of learning.
+            from .learning import chunks
+
+            parts = chunks("\n".join(json.loads(x.payload)["text"] for x in sources))
+            index = d.get("read_chunks", 0)
+            part = parts[index]
+            db.add(
+                s,
+                "owner",
+                "learning_chunk",
+                {
+                    "course_id": course.id,
+                    "source_ids": d["source_ids"] + [course.id],
+                    **part,
+                },
+            )
+            index += 1
             c.update(
-                notes="\n".join(json.loads(x.payload)["text"][:4000] for x in sources),
-                notes_method="extractive",
-                notes_truncated=any(
-                    len(json.loads(x.payload)["text"]) > 4000 for x in sources
-                ),
-                stage="awaiting_assessment",
-                steps_verified=2,
+                read_chunks=index,
+                total_chunks=len(parts),
+                stage="reading" if index < len(parts) else "awaiting_assessment",
                 mastered=False,
             )
-            course.payload = json.dumps(c)
             course.revision += 1
-            job.status = "completed"
-            d.update(checkpoint=2, attempts=d["attempts"] + 1, completed_at=now())
+            d.update(read_chunks=index, checkpoint=index, attempts=d["attempts"] + 1)
+            if index == len(parts):
+                original = "\n".join(json.loads(x.payload)["text"] for x in sources)
+                c.update(
+                    notes=original[:4000],
+                    notes_method="extractive",
+                    notes_truncated=len(original) > 4000,
+                    steps_verified=2,
+                )
+                job.status = "completed"
+                d["completed_at"] = now()
+                db.emit(s, "owner", "learning.awaiting_assessment", {"id": course.id})
+            else:
+                db.emit(
+                    s,
+                    "owner",
+                    "learning.chunk_read",
+                    {"id": course.id, "read_chunks": index, "total_chunks": len(parts)},
+                )
+            course.payload = json.dumps(c)
             job.payload = json.dumps(d)
-            db.emit(s, "owner", "learning.awaiting_assessment", {"id": course.id})
             return True
     return False
 
