@@ -90,6 +90,20 @@ struct AutonomyCandidate: Codable, Identifiable {
     let status: String
 }
 
+struct AutonomyGoal: Codable, Identifiable {
+    let id: String
+    let revision: Int
+    let title: String
+    let reason: String
+    let status: String
+    let estimatedMinutes: Int
+    let reservedMinutes: Int?
+    let spentSeconds: Int?
+    let actualMinutes: Int?
+    let pauseReason: String?
+    let summary: String?
+}
+
 struct WorkerStatus: Codable {
     let status: String?
     let alive: Bool?
@@ -270,6 +284,10 @@ actor FairyAPI {
         try decoder.decode([AutonomyCandidate].self, from: await request("autonomy/candidates"))
     }
 
+    func autonomyGoals() async throws -> [AutonomyGoal] {
+        try decoder.decode([AutonomyGoal].self, from: await request("autonomy/goals"))
+    }
+
     func refreshAutonomy() async throws {
         _ = try await request("autonomy/refresh", method: "POST", body: try encode([:]))
     }
@@ -287,6 +305,38 @@ actor FairyAPI {
             "autonomy/candidates/\(candidate.id)/dismiss",
             method: "POST",
             body: encode(["revision": candidate.revision])
+        )
+    }
+
+    func startGoal(_ goal: AutonomyGoal) async throws {
+        _ = try await request(
+            "autonomy/goals/\(goal.id)/start",
+            method: "POST",
+            body: encode(["revision": goal.revision])
+        )
+    }
+
+    func pauseGoal(_ goal: AutonomyGoal) async throws {
+        _ = try await request(
+            "autonomy/goals/\(goal.id)/pause",
+            method: "POST",
+            body: encode(["revision": goal.revision])
+        )
+    }
+
+    func completeGoal(_ goal: AutonomyGoal, summary: String) async throws {
+        _ = try await request(
+            "autonomy/goals/\(goal.id)/complete",
+            method: "POST",
+            body: encode(["revision": goal.revision, "summary": summary])
+        )
+    }
+
+    func cancelGoal(_ goal: AutonomyGoal) async throws {
+        _ = try await request(
+            "autonomy/goals/\(goal.id)/cancel",
+            method: "POST",
+            body: encode(["revision": goal.revision])
         )
     }
 

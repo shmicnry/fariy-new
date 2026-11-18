@@ -50,7 +50,7 @@ async function request(path, method = 'GET', body) {
     assert.equal(resetWidth, 238);
 
     await page.locator('#nav a[href="#learning"]').click();
-    const longName = '2026-11-17-Fairy-local-owner-long-learning-source-with-important-suffix.md';
+    const longName = `2026-11-18-Fairy-${crypto.randomUUID()}-learning-source-with-important-suffix.md`;
     await page.getByLabel('选择文字文件').setInputFiles({
         name: longName,
         mimeType: 'text/markdown',
@@ -134,16 +134,40 @@ async function request(path, method = 'GET', body) {
     const currentConfigs = await request('config');
     const currentConfig = currentConfigs[0] || {revision: 0};
     await request('config', 'PUT', {
-        ...currentConfig,
         revision: currentConfig.revision,
+        daily_minutes: currentConfig.daily_minutes ?? 45,
+        pet_enabled: currentConfig.pet_enabled ?? false,
         mac_execute: true,
         mac_allowed_apps: ['TextEdit'],
+        mac_allowed_paths: currentConfig.mac_allowed_paths || [],
+        autonomous_paid: currentConfig.autonomous_paid ?? false,
+        autonomy_enabled: currentConfig.autonomy_enabled ?? false,
+        autonomy_daily_minutes: currentConfig.autonomy_daily_minutes ?? 30,
+        autonomy_daily_items: currentConfig.autonomy_daily_items ?? 10,
     });
     await page.locator('#nav a[href="#evolution"]').click();
     await page.getByRole('button', {name: '保存自主预算', exact: true}).click();
+    await page.locator('.toast').filter({hasText: '保存自主预算已完成'}).waitFor();
     const updatedConfig = (await request('config'))[0];
     assert.equal(updatedConfig.mac_execute, true);
     assert.deepEqual(updatedConfig.mac_allowed_apps, ['TextEdit']);
+
+    const experimentDraft = 'background-event-draft-' + crypto.randomUUID();
+    const experimentField = page.getByLabel('实验用例与候选输出（JSON）');
+    await experimentField.fill(experimentDraft);
+    await request('evolution/experiments', 'POST', {
+        name: '保稿竞态事件',
+        baseline: 'baseline',
+        cases: [{input: '测试', required_terms: ['正确'], forbidden_terms: []}],
+        candidates: [
+            {name: 'baseline', outputs: ['正确']},
+            {name: 'candidate', outputs: ['正确且完整']},
+        ],
+    });
+    await page.locator('#syncNotice').waitFor({state: 'visible'});
+    await page.waitForTimeout(350);
+    assert.equal(await experimentField.inputValue(), experimentDraft);
+    assert.equal(await page.locator('#syncNotice').isVisible(), true);
 
     await page.setViewportSize({width: 390, height: 844});
     assert.equal(await resizer.isVisible(), false);
@@ -166,6 +190,7 @@ async function request(path, method = 'GET', body) {
                 'jump-to-latest behavior',
                 'IME composition does not submit',
                 'autonomy settings preserve Mac execution scope',
+                'draft survives background event refresh',
                 'iPhone layout has no horizontal overflow',
                 'no browser runtime errors',
             ],

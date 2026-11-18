@@ -183,10 +183,19 @@ def run_cycle(db, autonomy, state_dir, started_at, cycle):
     error = None
     try:
         tick_ok = tick(db)
+        stopped = autonomy.enforce_budget()
         created = autonomy.refresh()
-        summary = {"tick_processed": tick_ok, "autonomy_candidates_created": len(created)}
+        summary = {
+            "tick_processed": tick_ok,
+            "autonomy_candidates_created": len(created),
+            "autonomy_goals_stopped": len(stopped),
+        }
     except Exception as exc:
-        summary = {"tick_processed": False, "autonomy_candidates_created": 0}
+        summary = {
+            "tick_processed": False,
+            "autonomy_candidates_created": 0,
+            "autonomy_goals_stopped": 0,
+        }
         error = type(exc).__name__
     write_status(
         state_dir,

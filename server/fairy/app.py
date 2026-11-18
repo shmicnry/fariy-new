@@ -165,6 +165,10 @@ class CandidateChoice(Strict):
     revision: int = Field(ge=1)
 
 
+class GoalCompletion(CandidateChoice):
+    summary: str = Field(min_length=1, max_length=8000)
+
+
 class EvolutionApproval(Strict):
     candidate: str = Field(min_length=1, max_length=80)
 
@@ -302,6 +306,7 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "mac_read_only": True,
             "mac_ax_tree_read_only": True,
             "autonomy_queue": True,
+            "autonomy_goal_ledger": True,
             "evolution_lab": True,
             "worker_status_endpoint": True,
             "cross_page_event_sync": True,
@@ -732,7 +737,9 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
 
     @api.put("/config")
     def set_config(body: Config):
-        return service.configure(body.revision, body.model_dump(exclude={"revision"}))
+        data = body.model_dump(exclude={"revision"})
+        autonomy.validate_config(data)
+        return service.configure(body.revision, data)
 
     @api.get("/jobs")
     def jobs():
@@ -799,12 +806,33 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     def autonomy_budget():
         return autonomy.budget()
 
+    @api.get("/autonomy/goals")
+    def autonomy_goals():
+        return autonomy.goals()
+
+    @api.post("/autonomy/goals/{id}/start")
+    def start_autonomy_goal(id: str, body: CandidateChoice):
+        return autonomy.start(id, body.revision)
+
+    @api.post("/autonomy/goals/{id}/pause")
+    def pause_autonomy_goal(id: str, body: CandidateChoice):
+        return autonomy.pause(id, body.revision)
+
+    @api.post("/autonomy/goals/{id}/complete")
+    def complete_autonomy_goal(id: str, body: GoalCompletion):
+        return autonomy.complete(id, body.revision, body.summary)
+
+    @api.post("/autonomy/goals/{id}/cancel")
+    def cancel_autonomy_goal(id: str, body: CandidateChoice):
+        return autonomy.cancel(id, body.revision)
+
     @api.get("/autonomy/candidates")
     def autonomy_candidates():
         return autonomy.list("autonomy_candidate")
 
     @api.post("/autonomy/refresh")
     def refresh_autonomy():
+        autonomy.enforce_budget()
         return autonomy.refresh()
 
     @api.post("/autonomy/candidates/{id}/accept")

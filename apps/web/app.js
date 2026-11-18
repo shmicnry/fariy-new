@@ -823,7 +823,16 @@ $('login').onsubmit = e => {
                 if (routeDirty || document.activeElement?.closest('#content input, #content textarea, #content select')) {
                     showSyncNotice(event, meta);
                 } else {
-                    eventRefresh = setTimeout(() => run(renderPreservingScroll), 180);
+                    eventRefresh = setTimeout(() => {
+                        if (
+                            routeDirty
+                            || document.activeElement?.closest('#content input, #content textarea, #content select')
+                        ) {
+                            showSyncNotice(event, meta);
+                        } else {
+                            run(renderPreservingScroll);
+                        }
+                    }, 180);
                 }
             }
         }, online => {

@@ -130,6 +130,94 @@ export async function renderAutonomy(ui) {
         queue.append(row);
     }
 
+    const goalsPanel = panel('自主执行账本');
+    goalsPanel.append(el(
+        'p',
+        '启动后才计入实际执行时间；完成时结算实际时长并释放未使用预留。',
+        'muted'
+    ));
+    const goals = await api('autonomy/goals');
+    const goalState = {
+        planned: '待启动',
+        active: '执行中',
+        paused: '已暂停',
+        completed: '已完成',
+        cancelled: '已取消',
+    };
+    if (!goals.length) {
+        goalsPanel.append(el('p', '接受一个候选后会在这里生成可启动的目标。', 'muted'));
+    }
+    for (const goal of goals) {
+        const row = el('article', undefined, 'memory-row autonomy-card');
+        const reservedMinutes = goal.reserved_minutes ?? goal.estimated_minutes;
+        const progress = el('progress');
+        progress.max = Math.max(1, reservedMinutes * 60);
+        progress.value = Math.min(goal.spent_seconds || 0, reservedMinutes * 60);
+        row.append(
+            el('h3', goal.title),
+            el('p', goal.reason),
+            el('small', `预留 ${reservedMinutes} 分钟 · 已执行 ${goal.actual_minutes || 0} 分钟 · ${goalState[goal.status] || goal.status}`),
+            progress
+        );
+        if (goal.pause_reason) {
+            row.append(el(
+                'p',
+                goal.pause_reason === 'budget_exhausted' ? '已达到预留预算并自动暂停。' : '已由你暂停。',
+                'route-note'
+            ));
+        }
+        if (goal.summary) row.append(el('p', goal.summary));
+
+        if (goal.status === 'planned') {
+            row.append(button('开始执行', async () => {
+                await api('autonomy/goals/' + goal.id + '/start', 'POST', {
+                    revision: goal.revision,
+                });
+                await ui.refresh();
+            }));
+        } else if (goal.status === 'active') {
+            row.append(button('暂停并保留进度', async () => {
+                await api('autonomy/goals/' + goal.id + '/pause', 'POST', {
+                    revision: goal.revision,
+                });
+                await ui.refresh();
+            }));
+        } else if (goal.status === 'paused') {
+            row.append(button('继续执行', async () => {
+                await api('autonomy/goals/' + goal.id + '/start', 'POST', {
+                    revision: goal.revision,
+                });
+                await ui.refresh();
+            }));
+        }
+        if (['active', 'paused'].includes(goal.status)) {
+            const summary = el('textarea');
+            controlLabel('完成结果与验证依据', summary, row);
+            row.append(button('完成并结算', async () => {
+                await api('autonomy/goals/' + goal.id + '/complete', 'POST', {
+                    revision: goal.revision,
+                    summary: summary.value,
+                });
+                await ui.refresh();
+            }));
+        }
+        if (['planned', 'active', 'paused'].includes(goal.status)) {
+            row.append(confirmButton(
+                '取消目标并释放预留',
+                '取消自主目标',
+                '已执行时间仍会保留在当日账本，剩余预留会释放。',
+                async () => {
+                    await api('autonomy/goals/' + goal.id + '/cancel', 'POST', {
+                        revision: goal.revision,
+                    });
+                    await ui.refresh();
+                },
+                'secondary'
+            ));
+        }
+        goalsPanel.append(row);
+    }
+
     const lab = panel('隔离进化实验');
     lab.append(el('p', '固定用例由所有者提供，候选输出只在记录中比较。评分器不可被候选修改，实验通过也不会自动部署运行版本。', 'muted'));
     const experimentInput = el('textarea');

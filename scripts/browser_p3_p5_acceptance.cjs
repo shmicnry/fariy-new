@@ -118,6 +118,27 @@ async function api(path, method = 'GET', body) {
     const candidate = page.locator('article').filter({hasText: '继续练习：自主候选用例'});
     await candidate.waitFor();
     await candidate.getByRole('button', {name: '接受并加入目标'}).click();
+    const goal = page.locator('article').filter({hasText: '继续练习：自主候选用例'});
+    await goal.getByRole('button', {name: '开始执行'}).click();
+    await goal.getByRole('button', {name: '暂停并保留进度'}).click();
+    await goal.getByRole('button', {name: '继续执行'}).waitFor();
+    const completionSummary = '已完成合成课程练习并记录验证结果。';
+    const completionField = goal.locator('textarea');
+    await completionField.fill(completionSummary);
+    assert.equal(await completionField.inputValue(), completionSummary);
+    const completionResponsePromise = page.waitForResponse(
+        response => response.url().includes('/autonomy/goals/')
+            && response.url().endsWith('/complete')
+            && response.request().method() === 'POST'
+    );
+    await goal.getByRole('button', {name: '完成并结算'}).click();
+    const completionResponse = await completionResponsePromise;
+    assert.ok(completionResponse.ok(), await completionResponse.text());
+    assert.equal(
+        (await completionResponse.request().postDataJSON()).summary,
+        completionSummary
+    );
+    await goal.getByText(completionSummary, {exact: true}).waitFor();
     await page.getByRole('button', {name: '运行隔离评测'}).click();
     await page.getByRole('heading', {name: '回答约束实验', exact: true}).waitFor();
     await page.getByRole('button', {name: '记录为待人工评审', exact: true}).click();
@@ -161,6 +182,7 @@ async function api(path, method = 'GET', body) {
                 'allowlisted launch scope configured without launching',
                 'skill install/grant/invoke/disable',
                 'autonomy candidate generation and budget acceptance',
+                'autonomy goal start, pause and actual-time settlement',
                 'isolated evolution evaluation and review state',
                 'PWA manifest and service worker',
                 'browser voice input and read-aloud controls',

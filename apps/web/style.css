@@ -745,7 +745,8 @@ body:not(.connected) .notification-button {
     letter-spacing: -0.03em;
 }
 
-.metric progress {
+.metric progress,
+.autonomy-card progress {
     width: 100%;
     height: 4px;
     overflow: hidden;
@@ -755,12 +756,14 @@ body:not(.connected) .notification-button {
     color: var(--accent);
 }
 
-.metric progress::-webkit-progress-bar {
+.metric progress::-webkit-progress-bar,
+.autonomy-card progress::-webkit-progress-bar {
     border-radius: 2px;
     background: var(--line);
 }
 
-.metric progress::-webkit-progress-value {
+.metric progress::-webkit-progress-value,
+.autonomy-card progress::-webkit-progress-value {
     border-radius: 2px;
     background: var(--accent);
 }

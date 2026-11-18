@@ -10,6 +10,7 @@ final class FairyModel: ObservableObject {
     @Published var approvals: [ApprovalItem] = []
     @Published var skills: [SkillItem] = []
     @Published var autonomyCandidates: [AutonomyCandidate] = []
+    @Published var autonomyGoals: [AutonomyGoal] = []
     @Published var autonomyBudget: AutonomyBudget?
     @Published var workerStatus: WorkerStatus?
     @Published var modelSummary: ModelSummary?
@@ -84,6 +85,9 @@ final class FairyModel: ObservableObject {
         if let value = try? await api.autonomyBudget() { autonomyBudget = value }
         if let value = try? await api.autonomyCandidates() {
             autonomyCandidates = value.filter { $0.status == "proposed" }
+        }
+        if let value = try? await api.autonomyGoals() {
+            autonomyGoals = value
         }
         if let value = try? await api.workerStatus() { workerStatus = value }
         if let value = try? await api.modelSummary() { modelSummary = value }
@@ -203,6 +207,22 @@ final class FairyModel: ObservableObject {
         await perform {
             try await $0.dismissCandidate(candidate)
         }
+    }
+
+    func startGoal(_ goal: AutonomyGoal) async {
+        await perform { try await $0.startGoal(goal) }
+    }
+
+    func pauseGoal(_ goal: AutonomyGoal) async {
+        await perform { try await $0.pauseGoal(goal) }
+    }
+
+    func completeGoal(_ goal: AutonomyGoal, summary: String) async {
+        await perform { try await $0.completeGoal(goal, summary: summary) }
+    }
+
+    func cancelGoal(_ goal: AutonomyGoal) async {
+        await perform { try await $0.cancelGoal(goal) }
     }
 
     func requestNotificationPermission() async {
@@ -634,6 +654,93 @@ struct CourseDetailView: View {
     }
 }
 
+struct AutonomyGoalRow: View {
+    @EnvironmentObject private var model: FairyModel
+    let goal: AutonomyGoal
+    @State private var completionSummary = ""
+    @State private var confirmCancellation = false
+
+    private var reservedMinutes: Int {
+        goal.reservedMinutes ?? goal.estimatedMinutes
+    }
+
+    private var canComplete: Bool {
+        ["active", "paused"].contains(goal.status)
+            && !completionSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(goal.title).font(.headline)
+            Text(goal.reason).font(.callout).foregroundStyle(.secondary)
+            LabeledContent(
+                "账本",
+                value: "预留 \(reservedMinutes) 分钟 · 已执行 \(goal.actualMinutes ?? 0) 分钟"
+            )
+            .font(.caption)
+            if let pauseReason = goal.pauseReason {
+                Text(
+                    pauseReason == "budget_exhausted"
+                        ? "已达到预留预算并自动暂停。"
+                        : "已暂停，预留仍保留。"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            }
+            if let summary = goal.summary {
+                Text(summary).font(.callout)
+            }
+            HStack {
+                if goal.status == "planned" {
+                    Button("开始执行") {
+                        Task { await model.startGoal(goal) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else if goal.status == "active" {
+                    Button("暂停") {
+                        Task { await model.pauseGoal(goal) }
+                    }
+                    .buttonStyle(.bordered)
+                } else if goal.status == "paused" {
+                    Button("继续执行") {
+                        Task { await model.startGoal(goal) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                if ["planned", "active", "paused"].contains(goal.status) {
+                    Button("取消目标", role: .destructive) {
+                        confirmCancellation = true
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .disabled(model.isWorking)
+            if ["active", "paused"].contains(goal.status) {
+                TextField("完成结果与验证依据", text: $completionSummary, axis: .vertical)
+                    .lineLimit(2...6)
+                Button("完成并结算") {
+                    Task { await model.completeGoal(goal, summary: completionSummary) }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canComplete || model.isWorking)
+            }
+        }
+        .padding(.vertical, 4)
+        .confirmationDialog(
+            "取消自主目标？",
+            isPresented: $confirmCancellation,
+            titleVisibility: .visible
+        ) {
+            Button("取消目标并释放预留", role: .destructive) {
+                Task { await model.cancelGoal(goal) }
+            }
+            Button("保留目标", role: .cancel) {}
+        } message: {
+            Text("已执行时间仍会保留在当日账本，剩余预留会释放。")
+        }
+    }
+}
+
 struct TasksView: View {
     @EnvironmentObject private var model: FairyModel
 
@@ -660,6 +767,15 @@ struct TasksView: View {
                             }
                         }
                         .padding(.vertical, 4)
+                    }
+                }
+                Section("执行账本") {
+                    if model.autonomyGoals.isEmpty {
+                        Text("接受自主候选后可启动受预算约束的目标")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(model.autonomyGoals) { goal in
+                        AutonomyGoalRow(goal: goal)
                     }
                 }
                 Section("自主候选") {
@@ -733,6 +849,15 @@ struct AutonomyView: View {
                         LabeledContent("状态", value: budget.enabled ? "已启用" : "已暂停")
                         LabeledContent("分钟", value: "\(budget.usedMinutes) / \(budget.dailyMinutes)")
                         LabeledContent("候选", value: "\(budget.usedItems) / \(budget.dailyItems)")
+                    }
+                }
+                Section("执行账本") {
+                    if model.autonomyGoals.isEmpty {
+                        Text("接受候选后会在这里生成可启动目标")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(model.autonomyGoals) { goal in
+                        AutonomyGoalRow(goal: goal)
                     }
                 }
                 Section("候选") {

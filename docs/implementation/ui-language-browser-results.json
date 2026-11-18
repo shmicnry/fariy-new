@@ -12,6 +12,7 @@
     "jump-to-latest behavior",
     "IME composition does not submit",
     "autonomy settings preserve Mac execution scope",
+    "draft survives background event refresh",
     "iPhone layout has no horizontal overflow",
     "no browser runtime errors"
   ],

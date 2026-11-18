@@ -290,6 +290,131 @@ def test_autonomy_item_limit_blocks_second_candidate(env):
     ).status_code == 409
 
 
+def prepared_autonomy_goal(app, client, title="执行账本课程"):
+    app.state.service.material(title, "材料需要核验。", "ledger-material")
+    tick(app.state.db)
+    course = next(
+        item
+        for item in app.state.service.list("course")
+        if item["title"] == title
+    )
+    app.state.service.assess(
+        course["id"], course["revision"], False, "需要继续练习"
+    )
+    assert client.put(
+        "/v2/config",
+        json={
+            "revision": 0,
+            "autonomy_enabled": True,
+            "autonomy_daily_minutes": 20,
+            "autonomy_daily_items": 2,
+        },
+    ).status_code == 200
+    candidates = client.post("/v2/autonomy/refresh").json()
+    candidate = next(
+        item
+        for item in candidates
+        if item["type"] == "learning" and title in item["title"]
+    )
+    accepted = client.post(
+        "/v2/autonomy/candidates/" + candidate["id"] + "/accept",
+        json={"revision": candidate["revision"]},
+    )
+    assert accepted.status_code == 200, accepted.text
+    return accepted.json()["goal"]
+
+
+def test_autonomy_goal_ledger_measures_actual_time(env):
+    app, client = env
+    goal = prepared_autonomy_goal(app, client)
+    listed = client.get("/v2/autonomy/goals").json()
+    assert listed[0]["id"] == goal["id"]
+    assert listed[0]["status"] == "planned"
+    budget = client.get("/v2/autonomy/budget").json()
+    assert budget["used_minutes"] == 15
+    assert budget["reserved_seconds"] == 900
+
+    started = client.post(
+        "/v2/autonomy/goals/" + goal["id"] + "/start",
+        json={"revision": goal["revision"]},
+    )
+    assert started.status_code == 200, started.text
+    active = started.json()
+    with app.state.db.tx() as session:
+        row = app.state.service.get(session, goal["id"], "goal")
+        payload = json.loads(row.payload)
+        payload["active_since"] = (
+            datetime.now(timezone.utc) - timedelta(seconds=125)
+        ).isoformat()
+        row.payload = json.dumps(payload)
+    paused = client.post(
+        "/v2/autonomy/goals/" + goal["id"] + "/pause",
+        json={"revision": active["revision"]},
+    )
+    assert paused.status_code == 200, paused.text
+    assert paused.json()["status"] == "paused"
+    assert paused.json()["spent_seconds"] >= 125
+
+    completed = client.post(
+        "/v2/autonomy/goals/" + goal["id"] + "/complete",
+        json={
+            "revision": paused.json()["revision"],
+            "summary": "已完成核对并记录学习结果。",
+        },
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "completed"
+    assert completed.json()["actual_minutes"] >= 3
+    budget = client.get("/v2/autonomy/budget").json()
+    assert budget["reserved_seconds"] == 0
+    assert budget["used_seconds"] >= 125
+
+
+def test_worker_pauses_goal_at_reserved_budget(env):
+    app, client = env
+    goal = prepared_autonomy_goal(app, client)
+    started = client.post(
+        "/v2/autonomy/goals/" + goal["id"] + "/start",
+        json={"revision": goal["revision"]},
+    ).json()
+    with app.state.db.tx() as session:
+        row = app.state.service.get(session, goal["id"], "goal")
+        payload = json.loads(row.payload)
+        payload["active_since"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=16)
+        ).isoformat()
+        row.payload = json.dumps(payload)
+    assert client.post("/v2/autonomy/refresh").status_code == 200
+    goal_now = client.get("/v2/autonomy/goals").json()[0]
+    assert goal_now["id"] == goal["id"]
+    assert goal_now["status"] == "paused"
+    assert goal_now["pause_reason"] == "budget_exhausted"
+    assert goal_now["spent_seconds"] == 900
+
+
+def test_budget_cannot_drop_below_open_reservation(env):
+    app, client = env
+    prepared_autonomy_goal(app, client)
+    config = client.get("/v2/config").json()[0]
+    reduced = client.put(
+        "/v2/config",
+        json={
+            "revision": config["revision"],
+            "daily_minutes": config["daily_minutes"],
+            "pet_enabled": config["pet_enabled"],
+            "mac_execute": config["mac_execute"],
+            "autonomous_paid": config["autonomous_paid"],
+            "mac_allowed_apps": config["mac_allowed_apps"],
+            "mac_allowed_paths": config["mac_allowed_paths"],
+            "autonomy_enabled": True,
+            "autonomy_daily_minutes": 10,
+            "autonomy_daily_items": config["autonomy_daily_items"],
+        },
+    )
+    assert reduced.status_code == 409
+    assert reduced.json()["detail"] == "autonomy_budget_below_committed_usage"
+
+
 def test_single_refresh_deduplicates_world_conflicts(env):
     app, client = env
     service = app.state.service
@@ -578,7 +703,7 @@ def test_pwa_shell_is_served_and_does_not_cache_api(env):
     assert "url.pathname.startsWith('/v2/')" in worker.text
     assert "response.ok" in worker.text
     assert "event.request.mode === 'navigate'" in worker.text
-    assert "fairy-shell-v11" in worker.text
+    assert "fairy-shell-v13" in worker.text
 
 
 def test_local_voice_status_and_tts(env, monkeypatch):

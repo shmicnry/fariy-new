@@ -6,6 +6,7 @@
     "allowlisted launch scope configured without launching",
     "skill install/grant/invoke/disable",
     "autonomy candidate generation and budget acceptance",
+    "autonomy goal start, pause and actual-time settlement",
     "isolated evolution evaluation and review state",
     "PWA manifest and service worker",
     "browser voice input and read-aloud controls",
