@@ -89,6 +89,10 @@ class SourceReview(Strict):
     expires_at: str | None = None
 
 
+class SourceRefresh(Strict):
+    revision: int = Field(ge=1)
+
+
 class WorldClaim(Strict):
     subject: str = Field(min_length=1, max_length=160)
     predicate: str = Field(min_length=1, max_length=160)
@@ -300,6 +304,7 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
                 ".tiff",
             ],
             "source_review": True,
+            "source_version_refresh": True,
             "world_claims": True,
             "fixed_choice_assessments": True,
             "skills_registry": True,
@@ -454,6 +459,16 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     def source_review(id: str, body: SourceReview):
         return KnowledgeService(db).source_review(
             id, body.revision, body.rating, body.reason, body.expires_at
+        )
+
+    @api.post("/learning/sources/{id}/refresh")
+    async def source_refresh(id: str, body: SourceRefresh, k=Depends(key)):
+        return await asyncio.to_thread(
+            KnowledgeService(db).refresh_source,
+            id,
+            body.revision,
+            k,
+            fetch_text,
         )
 
     @api.post("/world/claims")

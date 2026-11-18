@@ -2,9 +2,11 @@
 
 最新设计规范：[Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)，对应本地 Skill：`$fairy-ui-design`。
 
-最新阶段：[自主执行账本与表单保稿](docs/implementation/自主执行账本与表单保稿.md)。自主目标现支持启动、暂停、继续、完成结算、取消释放和无上限时间自动停机；Web 与 SwiftUI 已同步。
+最新阶段：[网页来源版本刷新](docs/implementation/网页来源版本刷新.md)。网页内容变化会创建新来源与课程，失效旧来源及派生记忆；未变化和失败都有独立审计状态。
 
-最新全量审计：[P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)。修复技能调用状态未持久化、自主页覆盖 Mac 授权、原生请求超时、PWA 离线回退、配置边界、Compose 端口和 CI PostgreSQL 缺口；加入执行账本后 PostgreSQL 全量回归 **131 passed**。
+上一阶段：[自主执行账本与表单保稿](docs/implementation/自主执行账本与表单保稿.md)。自主目标现支持启动、暂停、继续、完成结算、取消释放和无上限时间自动停机；Web 与 SwiftUI 已同步。
+
+最新全量审计：[P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)。修复技能调用状态未持久化、自主页覆盖 Mac 授权、原生请求超时、PWA 离线回退、配置边界、Compose 端口和 CI PostgreSQL 缺口；加入执行账本与来源刷新后 PostgreSQL 全量回归 **133 passed**。
 
 最新审计：[P2缺漏审计与修复](docs/implementation/P2审计修复.md)。修复文件幂等、学习结论撤销、精确最终依据、来源失效、测验取消和撤回入口等问题；最终在隔离 Postgres 16 上 **108 项回归全部通过**。
 
@@ -21,7 +23,7 @@ Fairy 0.3 实现 **Ollama 本地主模型 + 可配置云副模型 + 可审阅记
 - 每轮可选择自动路由、仅本机、先本机再请副模型协助。云端默认只收到当前问题；额外发送本轮检索到的已确认记忆需要明确选择。
 - 对话生成有逐字出处的记忆提案；确认后才参与长期召回。支持拒绝、查看来源、纠正、版本记录及遗忘。记忆保留逐字原文，同时标明主体和第三人称事实；明确的饮品偏好问句只依据对应主体的已确认记录回答。
 - 纠正会屏蔽相关旧对话来源；来源变化或取消后，旧模型结果不能提交，也不能继续发往云端。
-- 投喂 TXT/Markdown/PDF/DOCX，按页或段落保留出处，支持练习、固定题测验和来源复核。
+- 投喂 TXT/Markdown/PDF/DOCX，按页或段落保留出处，支持练习、固定题测验和来源复核；网页来源可显式检查版本，变化时创建新版本并失效旧派生内容。
 - 技能安装、限时授权、启用和停用分离；Mac 桥可读取状态、应用和允许目录，并可在四层条件满足时启动允许列表中的应用。
 - 管理界面接收 SSE 事件并更新相关页面；小表单有未提交内容时会保留草稿并显示刷新提示。
 - 通知中心保存后台更新、审批和提醒；浏览器授权后可在页面后台显示系统通知。
@@ -132,7 +134,7 @@ python scripts/export_contract.py
 python scripts/acceptance_ollama.py
 ```
 
-P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境测试跳过；加入常驻服务、同步、语音、OCR、语义检索、原生操作、P3–P5 缺漏修复与自主执行账本后，在隔离 Postgres 16 上 **131 项全部通过**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
+P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境测试跳过；加入常驻服务、同步、语音、OCR、语义检索、原生操作、P3–P5 缺漏修复、自主执行账本与来源版本刷新后，在隔离 Postgres 16 上 **133 项全部通过**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
 
 - [P1 实施与验证记录](docs/implementation/P1-模型与记忆闭环.md)
 - [Ollama 实测结果](docs/implementation/p1-ollama-acceptance.json)
@@ -141,6 +143,7 @@ P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境�
 - [P3–P5 纵切记录](docs/implementation/P3-P5-纵切交付与验证.md)
 - [P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)
 - [自主执行账本与表单保稿](docs/implementation/自主执行账本与表单保稿.md)
+- [网页来源版本刷新](docs/implementation/网页来源版本刷新.md)
 - [P3–P5 浏览器结果](docs/implementation/p3-p5-browser-results.json)
 - [UI 控件审查与优化](docs/implementation/UI控件审查与优化.md)
 - [Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)

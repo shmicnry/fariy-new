@@ -136,6 +136,107 @@ def test_failed_link_retry_does_not_fetch_again(env):
     assert r["status"] == again["status"] == "failed"
 
 
+def test_web_source_refresh_versions_and_invalidates_derived_records(
+    env, monkeypatch
+):
+    app, c, svc = env
+    imported = svc.link(
+        "https://example.com/guide",
+        "指南",
+        "link",
+        lambda _: "植物需要水分。",
+    )
+    old_source = next(
+        item for item in svc.list("material") if item["id"] == imported["material_id"]
+    )
+    old_course = next(
+        item for item in svc.list("course") if item["id"] == imported["course_id"]
+    )
+    memory = app.state.service.memory(
+        "植物需要水分。",
+        [old_source["id"]],
+        "memory",
+    )
+    calls = []
+
+    def changed(url):
+        calls.append(url)
+        return "植物需要光照。"
+
+    monkeypatch.setattr("fairy.app.fetch_text", changed)
+    response = c.post(
+        "/v2/learning/sources/" + old_source["id"] + "/refresh",
+        json={"revision": old_source["revision"]},
+        headers={"Idempotency-Key": "refresh"},
+    )
+    assert response.status_code == 200, response.text
+    refreshed = response.json()
+    assert refreshed["status"] == "changed"
+    assert refreshed["changed"] is True and refreshed["new_source_id"] != old_source["id"]
+    assert len(calls) == 1
+    with app.state.db.sessions() as session:
+        assert app.state.service.get(session, old_source["id"]).status == "deleted"
+    assert app.state.service.list("memory") == []
+    assert not any(item["id"] == old_course["id"] for item in svc.list("course"))
+
+    new_source = next(
+        item for item in svc.list("material") if item["id"] == refreshed["new_source_id"]
+    )
+    assert new_source["previous_source_id"] == old_source["id"]
+    assert new_source["source_version"] == 2
+    assert new_source["quality"]["rating"] == "unreviewed"
+    assert any(
+        item["title"] == "指南" and item["stage"] == "queued"
+        for item in svc.list("course")
+    )
+
+    replay = c.post(
+        "/v2/learning/sources/" + old_source["id"] + "/refresh",
+        json={"revision": old_source["revision"]},
+        headers={"Idempotency-Key": "refresh"},
+    )
+    assert replay.status_code == 200
+    assert replay.json()["id"] == refreshed["id"]
+    assert len(calls) == 1
+
+    monkeypatch.setattr("fairy.app.fetch_text", lambda _: "植物需要光照。")
+    unchanged = c.post(
+        "/v2/learning/sources/" + new_source["id"] + "/refresh",
+        json={"revision": new_source["revision"]},
+        headers={"Idempotency-Key": "refresh-unchanged"},
+    )
+    assert unchanged.status_code == 200, unchanged.text
+    assert unchanged.json()["status"] == "unchanged"
+    assert unchanged.json()["changed"] is False
+    assert c.get("/v2/learning/sources").json()[0]["id"] == new_source["id"]
+
+
+def test_web_source_refresh_failure_keeps_current_source(env):
+    app, c, svc = env
+    imported = svc.link(
+        "https://example.com/stable",
+        "稳定来源",
+        "stable",
+        lambda _: "当前正文。",
+    )
+    source = next(
+        item for item in svc.list("material") if item["id"] == imported["material_id"]
+    )
+
+    def unavailable(_):
+        raise ValueError("network unavailable")
+
+    result = svc.refresh_source(
+        source["id"],
+        source["revision"],
+        "refresh-failed",
+        unavailable,
+    )
+    assert result["status"] == "failed"
+    current = c.get("/v2/learning/sources").json()
+    assert len(current) == 1 and current[0]["id"] == source["id"]
+
+
 def test_fetch_rejects_redirect_and_enforces_pin():
     from unittest.mock import MagicMock
 

@@ -57,6 +57,25 @@ export async function renderKnowledge(ui) {
             });
             await ui.refresh()
         }));
+        if (r.source_type === 'web_link' && r.url) {
+            box.append(confirmButton(
+                '检查并更新来源',
+                '更新网页来源',
+                '如果网页正文变化，系统会建立新版本并失效旧来源、旧课程及其派生记忆；需要重新复核新版本。',
+                async () => {
+                    const result = await api(
+                        'learning/sources/' + r.id + '/refresh',
+                        'POST',
+                        {revision: r.revision}
+                    );
+                    if (result.status === 'failed') {
+                        throw Error('来源刷新失败：' + (result.error || '未知错误'));
+                    }
+                    if (result.changed) await ui.refresh();
+                },
+                'secondary'
+            ));
+        }
         box.append(confirmButton(
             '删除这份来源',
             '删除来源',

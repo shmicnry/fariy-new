@@ -60,6 +60,7 @@ class Service:
                     "memory",
                     "memory_proposal",
                     "link_import",
+                    "source_refresh",
                 ):
                     return view(record)
                 if record and record.kind in (

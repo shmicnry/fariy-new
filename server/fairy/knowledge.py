@@ -1,5 +1,6 @@
 """Owner-reviewed source quality, grounded world claims and course evaluation."""
 
+import hashlib
 import json
 from datetime import datetime, timezone
 from .learning import LearningService
@@ -114,6 +115,150 @@ class KnowledgeService(LearningService):
             )
             self.db.emit(s, "owner", "learning.link_imported", {"id": imp.id})
             return view(imp)
+
+    def refresh_source(self, id, revision, key, collector):
+        body = {"op": "source.refresh", "source_id": id, "revision": revision}
+        with self.db.tx() as s:
+            cached = self.replay(s, key, body)
+            if cached is not None:
+                return cached
+            source = self.get(s, id, "material")
+            data = json.loads(source.payload)
+            if (
+                source.status != "active"
+                or source.revision != revision
+                or data.get("source_type") != "web_link"
+                or not data.get("url")
+            ):
+                fail(409, "web_source_not_refreshable")
+            refresh = self.db.add(
+                s,
+                "owner",
+                "source_refresh",
+                {
+                    "source_id": id,
+                    "url": data["url"],
+                    "previous_revision": revision,
+                    "previous_sha256": hashlib.sha256(
+                        data["text"].encode("utf-8")
+                    ).hexdigest(),
+                },
+                "pending",
+            )
+            self.remember_result(s, key, body, view(refresh))
+        try:
+            content = collector(data["url"])
+            if not isinstance(content, str) or not content.strip() or len(content) > 256000:
+                raise ValueError("invalid_collected_text")
+        except Exception:
+            with self.db.tx() as s:
+                current = self.get(s, refresh.id, "source_refresh")
+                payload = json.loads(current.payload)
+                payload.update(error="source_refresh_fetch_failed")
+                current.status = "failed"
+                current.revision += 1
+                current.payload = json.dumps(payload)
+                self.db.emit(
+                    s,
+                    "owner",
+                    "learning.source_refresh_failed",
+                    {"id": current.id, "source_id": id},
+                )
+                return view(current)
+
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        if digest == hashlib.sha256(data["text"].encode("utf-8")).hexdigest():
+            with self.db.tx() as s:
+                current = self.get(s, refresh.id, "source_refresh")
+                payload = json.loads(current.payload)
+                payload.update(
+                    status="unchanged",
+                    changed=False,
+                    checked_at=now(),
+                    content_sha256=digest,
+                )
+                current.status = "completed"
+                current.revision += 1
+                current.payload = json.dumps(payload)
+                self.db.emit(
+                    s,
+                    "owner",
+                    "learning.source_refresh_unchanged",
+                    {"id": current.id, "source_id": id},
+                )
+                return view(current)
+
+        material_result = self.material(
+            data["title"],
+            content,
+            "source-refresh-material-" + refresh.id,
+        )
+        new_material = material_result["material"]
+        try:
+            with self.db.tx() as s:
+                row = self.get(s, new_material["id"], "material")
+                payload = json.loads(row.payload)
+                payload.update(
+                    source_type="web_link",
+                    url=data["url"],
+                    previous_source_id=id,
+                    source_version=int(data.get("source_version", 1)) + 1,
+                    refreshed_at=now(),
+                    quality={"rating": "unreviewed", "reason": "来源已更新，等待复核"},
+                )
+                row.payload = json.dumps(payload)
+                row.revision += 1
+                course = self.get(s, material_result["course"]["id"], "course")
+                course_data = json.loads(course.payload)
+                course_data["practice_required"] = True
+                course.payload = json.dumps(course_data)
+                course.revision += 1
+            self.invalidate(id, revision)
+        except Exception:
+            try:
+                self.invalidate(new_material["id"], 1)
+            except Exception:
+                pass
+            with self.db.tx() as s:
+                current = self.get(s, refresh.id, "source_refresh")
+                payload = json.loads(current.payload)
+                payload.update(error="source_refresh_apply_failed")
+                current.status = "failed"
+                current.revision += 1
+                current.payload = json.dumps(payload)
+                self.db.emit(
+                    s,
+                    "owner",
+                    "learning.source_refresh_failed",
+                    {"id": current.id, "source_id": id},
+                )
+                return view(current)
+
+        with self.db.tx() as s:
+            current = self.get(s, refresh.id, "source_refresh")
+            payload = json.loads(current.payload)
+            payload.update(
+                status="changed",
+                changed=True,
+                checked_at=now(),
+                content_sha256=digest,
+                new_source_id=new_material["id"],
+                new_course_id=material_result["course"]["id"],
+            )
+            current.status = "completed"
+            current.revision += 1
+            current.payload = json.dumps(payload)
+            self.db.emit(
+                s,
+                "owner",
+                "learning.source_refreshed",
+                {
+                    "id": current.id,
+                    "source_id": id,
+                    "new_source_id": new_material["id"],
+                },
+            )
+            return view(current)
 
     def source_review(self, id, revision, rating, reason, expires_at):
         if not reason.strip():
