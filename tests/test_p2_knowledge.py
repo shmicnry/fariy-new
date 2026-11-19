@@ -9,11 +9,12 @@ from fairy.knowledge import KnowledgeService
 from fairy.link_fetch import validate_url, public_addresses, fetch_text, ArticleParser
 from fairy.autonomy import AutonomyService
 from fairy.worker import tick, refresh_due_source
+from tests.db import postgres_url
 
 
 @pytest.fixture
 def env(tmp_path):
-    app = create_app("sqlite:///" + str(tmp_path / "test.db"), token="x")
+    app = create_app(postgres_url(tmp_path), token="x")
     c = TestClient(app)
     c.headers["Authorization"] = "Bearer x"
     return app, c, KnowledgeService(app.state.db)

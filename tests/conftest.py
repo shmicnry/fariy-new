@@ -1,4 +1,21 @@
+import os
+
 import pytest
+
+
+def pytest_configure(config):
+    if not os.getenv("FAIRY_TEST_POSTGRES_URL"):
+        raise pytest.UsageError(
+            "FAIRY_TEST_POSTGRES_URL must point to a disposable PostgreSQL database"
+        )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_postgres_schemas():
+    yield
+    from tests.db import cleanup_schemas
+
+    cleanup_schemas()
 
 
 @pytest.fixture(autouse=True)

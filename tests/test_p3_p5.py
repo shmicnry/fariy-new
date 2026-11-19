@@ -17,11 +17,12 @@ from fairy.app import create_app
 from fairy.cognition import character_cosine, relevance
 from fairy.semantic import cosine
 from fairy.worker import WorkerLock, tick, write_status
+from tests.db import postgres_url
 
 
 @pytest.fixture
 def env(tmp_path):
-    app = create_app("sqlite:///" + str(tmp_path / "milestones.db"), token="owner")
+    app = create_app(postgres_url(tmp_path), token="owner")
     client = TestClient(app)
     client.headers["Authorization"] = "Bearer owner"
     return app, client
@@ -466,7 +467,7 @@ def test_semantic_embeddings_are_local_and_cached(tmp_path, monkeypatch):
     monkeypatch.setenv("FAIRY_OLLAMA_MODEL", "")
     monkeypatch.setenv("FAIRY_EMBEDDING_MODEL", "test-embedding")
     app = create_app(
-        "sqlite:///" + str(tmp_path / "semantic.db"),
+        postgres_url(tmp_path),
         token="owner",
         transport=httpx.MockTransport(handler),
     )

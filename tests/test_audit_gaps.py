@@ -6,11 +6,12 @@ from fairy.app import create_app
 from fairy.learning import LearningService
 from fairy.knowledge import KnowledgeService
 from fairy.worker import tick
+from tests.db import postgres_url
 
 
 @pytest.fixture
 def env(tmp_path):
-    app = create_app("sqlite:///" + str(tmp_path / "audit.db"), token="t")
+    app = create_app(postgres_url(tmp_path), token="t")
     c = TestClient(app)
     c.headers["Authorization"] = "Bearer t"
     return app, c, KnowledgeService(app.state.db)

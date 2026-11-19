@@ -7,4 +7,4 @@ COPY apps/web apps/web
 RUN pip install --no-cache-dir -r requirements.lock && pip install --no-cache-dir --no-deps . && useradd -m fairy && mkdir var && chown fairy var
 USER fairy
 EXPOSE 8000
-CMD ["uvicorn", "fairy.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "fairy.asgi:app", "--host", "0.0.0.0", "--port", "8000"]

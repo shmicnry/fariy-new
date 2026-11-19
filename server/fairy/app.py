@@ -188,7 +188,10 @@ class Choice(Strict):
 
 def create_app(url=None, token=None, transport=None, secrets_dir=None):
     Path("var").mkdir(exist_ok=True)
-    db = Store(url or os.getenv("FAIRY_DATABASE_URL", "sqlite:///var/fairy.db"))
+    database_url = url or os.getenv("FAIRY_DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("database_url_required")
+    db = Store(database_url)
     service = MemoryService(db)
     model_settings = ModelSettings(db, secrets_dir=secrets_dir)
     router = ModelRouter(service, model_settings, transport=transport)
@@ -982,6 +985,3 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             )
 
     return app
-
-
-app = create_app()

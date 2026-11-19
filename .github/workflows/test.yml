@@ -27,3 +27,4 @@ jobs:
       - run: pip install -r requirements.lock
       - run: pip install -e '.[test]'
       - run: pytest -q
+      - run: python scripts/export_contract.py

@@ -7,11 +7,12 @@ from fairy.store import Store
 from fairy.service import Service
 from fairy.worker import tick
 from fairy.cognition import rrf, decay, shallow_score, context
+from tests.db import postgres_url
 
 
 @pytest.fixture
 def app(tmp_path):
-    return create_app("sqlite:///" + str(tmp_path / "test.db"), token="test-secret")
+    return create_app(postgres_url(tmp_path), token="test-secret")
 
 
 @pytest.fixture
@@ -33,7 +34,7 @@ def test_auth(app):
 
 
 def test_fail_closed(tmp_path):
-    c = TestClient(create_app("sqlite:///" + str(tmp_path / "t.db"), token=""))
+    c = TestClient(create_app(postgres_url(tmp_path), token=""))
     assert c.get("/v2/cards").status_code == 503
 
 
@@ -196,7 +197,7 @@ def test_events_replay_order(client):
 
 
 def test_restart_persistence(tmp_path):
-    url = "sqlite:///" + str(tmp_path / "restart.db")
+    url = postgres_url(tmp_path)
     one = Service(Store(url))
     one.custom_card("hello", "world", "note", None, "a")
     two = Service(Store(url))
@@ -314,7 +315,7 @@ def test_provider_context_and_success(tmp_path, monkeypatch):
         )
 
     app = create_app(
-        "sqlite:///" + str(tmp_path / "model.db"),
+        postgres_url(tmp_path),
         token="t",
         transport=httpx.MockTransport(handler),
     )

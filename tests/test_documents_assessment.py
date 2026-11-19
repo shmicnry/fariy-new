@@ -10,6 +10,7 @@ from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
 from fairy.app import create_app
 from fairy.document_extract import extract
 from fairy.worker import tick
+from tests.db import postgres_url
 
 
 def pdf_bytes(text="Synthetic text"):
@@ -79,7 +80,7 @@ def test_docx_zip_expansion_refused():
 
 
 def test_file_upload_pdf_preserves_page_location(tmp_path):
-    app = create_app("sqlite:///" + str(tmp_path / "test.db"), token="t")
+    app = create_app(postgres_url(tmp_path), token="t")
     c = TestClient(app)
     c.headers["Authorization"] = "Bearer t"
     r = c.post(
@@ -100,7 +101,7 @@ def test_file_upload_pdf_preserves_page_location(tmp_path):
 def setup(tmp_path, monkeypatch, handler):
     monkeypatch.setenv("FAIRY_OLLAMA_MODEL", "fixture")
     app = create_app(
-        "sqlite:///" + str(tmp_path / "q.db"),
+        postgres_url(tmp_path),
         token="t",
         transport=httpx.MockTransport(handler),
     )

@@ -10,10 +10,9 @@ from sqlalchemy import (
     Integer,
     Text,
     UniqueConstraint,
-    event,
 )
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 
 def now():
@@ -79,17 +78,9 @@ def view(r):
 
 class Store:
     def __init__(self, url):
-        options = {"pool_pre_ping": True}
-        if url.startswith("sqlite"):
-            options["connect_args"] = {"check_same_thread": False, "timeout": 15}
-            if ":memory:" in url:
-                options["poolclass"] = StaticPool
-        self.engine = create_engine(url, **options)
-        if url.startswith("sqlite"):
-
-            @event.listens_for(self.engine, "connect")
-            def configure(db, _):
-                db.execute("PRAGMA foreign_keys=ON")
+        if make_url(url).get_backend_name() != "postgresql":
+            raise ValueError("postgresql_database_required")
+        self.engine = create_engine(url, pool_pre_ping=True)
 
         from .migrations import migrate
 
@@ -101,7 +92,7 @@ class Store:
         from sqlalchemy import update
 
         with self.sessions.begin() as s:
-            # UPDATE acquires a database write/row lock on SQLite/Postgres, including across processes.
+            # The row update serializes writers across API and worker processes.
             s.execute(
                 update(ScopeLock)
                 .where(ScopeLock.id == scope)

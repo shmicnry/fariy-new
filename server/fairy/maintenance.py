@@ -1,49 +1,99 @@
-"""SQLite snapshot backup/restore. Restore always creates a new database, never overwrites."""
+"""PostgreSQL backup and restore through the standard PG tools."""
 
 import argparse
 import hashlib
 import os
 from pathlib import Path
-import sqlite3
+import shutil
+import subprocess
 import tempfile
+from urllib.parse import urlsplit, urlunsplit
 
-from .migrations import CURRENT_VERSION
+
+def native_url(database_url):
+    parsed = urlsplit(database_url.replace("postgresql+psycopg://", "postgresql://", 1))
+    if parsed.scheme != "postgresql":
+        raise ValueError("postgresql_database_required")
+    return urlunsplit(parsed)
 
 
-def copy_database(source, target, expected_sha256=None):
-    source, target = Path(source).absolute(), Path(target).absolute()
-    if not source.is_file() or source.is_symlink():
-        raise ValueError("source_not_regular_database")
+def tool(name):
+    configured = shutil.which(name)
+    if configured:
+        return configured
+    for directory in (Path("/opt/homebrew/bin"), Path("/usr/local/bin")):
+        candidate = directory / name
+        if candidate.is_file():
+            return str(candidate)
+    raise ValueError(f"{name}_required")
+
+
+def backup_database(database_url, target):
+    target = Path(target).absolute()
     if target.exists() or target.is_symlink():
         raise ValueError("target_already_exists")
-    if (
-        expected_sha256
-        and hashlib.sha256(source.read_bytes()).hexdigest() != expected_sha256
-    ):
-        raise ValueError("backup_digest_mismatch")
-    with sqlite3.connect(source.as_uri() + "?mode=ro", uri=True) as db:
-        if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-            raise ValueError("database_integrity_failed")
-        try:
-            version = db.execute(
-                "SELECT version FROM schema_version WHERE id=1"
-            ).fetchone()[0]
-        except sqlite3.OperationalError:
-            version = 0
-        if version > CURRENT_VERSION:
-            raise ValueError("backup_schema_newer_than_application")
-        fd, staging = tempfile.mkstemp(prefix=".fairy-backup-", dir=target.parent)
-        os.close(fd)
-        try:
-            with sqlite3.connect(staging) as destination:
-                db.backup(destination)
-            # hard link creates destination exclusively; concurrent processes cannot overwrite it.
-            os.link(staging, target)
-        finally:
-            os.unlink(staging)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, staging_name = tempfile.mkstemp(
+        prefix=".fairy-backup-", suffix=".dump", dir=target.parent
+    )
+    os.close(descriptor)
+    staging = Path(staging_name)
+    try:
+        process = subprocess.run(
+            [
+                tool("pg_dump"),
+                "--format=custom",
+                "--no-owner",
+                "--no-acl",
+                "--file",
+                str(staging),
+                native_url(database_url),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        if process.returncode != 0:
+            raise ValueError("postgres_backup_failed")
+        os.chmod(staging, 0o600)
+        os.link(staging, target)
+    finally:
+        staging.unlink(missing_ok=True)
     return {
         "file": str(target),
         "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+        "format": "postgresql_custom",
+        "credentials_included": False,
+    }
+
+
+def restore_database(source, database_url, expected_sha256):
+    source = Path(source).absolute()
+    if not source.is_file() or source.is_symlink():
+        raise ValueError("source_not_regular_backup")
+    if hashlib.sha256(source.read_bytes()).hexdigest() != expected_sha256:
+        raise ValueError("backup_digest_mismatch")
+    process = subprocess.run(
+        [
+            tool("pg_restore"),
+            "--no-owner",
+            "--no-acl",
+            "--exit-on-error",
+            "--dbname",
+            native_url(database_url),
+            str(source),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    if process.returncode != 0:
+        raise ValueError("postgres_restore_failed")
+    return {
+        "restored": True,
+        "file": str(source),
         "credentials_included": False,
     }
 
@@ -51,15 +101,19 @@ def copy_database(source, target, expected_sha256=None):
 def main():
     import json
 
-    p = argparse.ArgumentParser()
-    p.add_argument("action", choices=["backup", "restore"])
-    p.add_argument("source")
-    p.add_argument("target")
-    p.add_argument("--sha256")
-    args = p.parse_args()
-    if args.action == "restore" and not args.sha256:
-        p.error("restore requires --sha256 from backup report")
-    print(json.dumps(copy_database(args.source, args.target, args.sha256)))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("action", choices=["backup", "restore"])
+    parser.add_argument("source")
+    parser.add_argument("target")
+    parser.add_argument("--sha256")
+    args = parser.parse_args()
+    if args.action == "backup":
+        result = backup_database(args.source, args.target)
+    else:
+        if not args.sha256:
+            parser.error("restore requires --sha256 from backup report")
+        result = restore_database(args.source, args.target, args.sha256)
+    print(json.dumps(result))
 
 
 if __name__ == "__main__":

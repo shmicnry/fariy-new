@@ -2,7 +2,9 @@
 
 最新设计规范：[Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)，对应本地 Skill：`$fairy-ui-design`。
 
-最新阶段：[来源周期检查与 Xcode App 骨架](docs/implementation/来源周期检查与Xcode-App骨架.md)。网页来源支持计划检查、每日网络上限和失败退避；SwiftUI Package 已补齐可构建的 macOS/iOS App target、Info.plist 与 entitlements。
+最新阶段：[PostgreSQL 单一数据库迁移](docs/implementation/PostgreSQL单一数据库迁移.md)。本机、API、worker、测试与备份已全部切换到 PostgreSQL 16，SQLite 运行支持和旧数据文件已移除。
+
+上一阶段：[来源周期检查与 Xcode App 骨架](docs/implementation/来源周期检查与Xcode-App骨架.md)。网页来源支持计划检查、每日网络上限和失败退避；SwiftUI Package 已补齐可构建的 macOS/iOS App target、Info.plist 与 entitlements。
 
 上一阶段：[网页来源版本刷新](docs/implementation/网页来源版本刷新.md)。网页内容变化会创建新来源与课程，失效旧来源及派生记忆；未变化和失败都有独立审计状态。
 
@@ -41,11 +43,14 @@ Fairy 0.3 实现 **Ollama 本地主模型 + 可配置云副模型 + 可审阅记
 Python 3.11+，从仓库根目录执行：
 
 ```sh
+brew services start postgresql@16
+createdb fairy
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.lock
 python -m pip install -e '.[test]'
 export FAIRY_OLLAMA_MODEL='qwen3:4b'
+export FAIRY_DATABASE_URL="postgresql+psycopg://$USER@127.0.0.1:5432/fairy"
 FAIRY_TOKEN='替换为你自己生成的足够长的随机令牌' scripts/start_local_api.sh
 ```
 
@@ -90,7 +95,7 @@ export FAIRY_ALLOWED_HOSTS='你的精确HTTPS主机名'
 4. 在记忆页纠正为“我现在喜欢喝温水。”并填写原因；查看版本记录，再次询问。
 5. 遗忘该记忆后，当前条目和版本不再召回，相关旧来源从后续上下文屏蔽。
 
-纠正保留历史，遗忘清除对应记忆版本；原始材料/对话证据保留供手动查看。需要删除来源时使用来源删除 API，会级联失效其派生内容。不保证清除 SQLite 空闲页、已有备份或供应商副本。
+纠正保留历史，遗忘清除对应记忆版本；原始材料/对话证据保留供手动查看。需要删除来源时使用来源删除 API，会级联失效其派生内容。不保证清除 PostgreSQL 物理页、已有备份或供应商副本。
 
 ## 常驻 API 与学习 worker
 
@@ -106,7 +111,8 @@ scripts/fairy_backup_service.sh install
 
 - API：`http://127.0.0.1:8010`
 - API owner token：`$HOME/Library/Application Support/Fairy/api-token`
-- 状态与数据库：`$HOME/Library/Application Support/Fairy/state`
+- 本机状态与凭证目录：`$HOME/Library/Application Support/Fairy/state`
+- 数据库：本机 PostgreSQL `fairy`
 - 运行副本：`$HOME/Library/Application Support/Fairy/worker-runtime`
 - 日志：`$HOME/Library/Logs/Fairy`
 
@@ -130,13 +136,14 @@ worker 具有单实例锁、心跳、异常退避和 SIGTERM 停止处理。API 
 ## 验证
 
 ```sh
+export FAIRY_TEST_POSTGRES_URL="postgresql+psycopg://$USER@127.0.0.1:5432/postgres"
 python -m pytest -q
 python scripts/export_contract.py
 # 显式运行真实本机模型验收；使用临时数据库和合成资料，不调用云端：
 python scripts/acceptance_ollama.py
 ```
 
-P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境测试跳过；加入常驻服务、同步、语音、OCR、语义检索、原生操作、P3–P5 缺漏修复、自主执行账本、来源版本刷新与周期检查后，在隔离 Postgres 16 上 **135 项全部通过**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
+P1 基线 **62 项回归通过**；加入常驻服务、同步、语音、OCR、语义检索、原生操作、P3–P5 缺漏修复、自主执行账本、来源版本刷新、周期检查与 PostgreSQL 单一库迁移后，在 PostgreSQL 16 上 **135 项全部通过，0 skipped**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
 
 - [P1 实施与验证记录](docs/implementation/P1-模型与记忆闭环.md)
 - [Ollama 实测结果](docs/implementation/p1-ollama-acceptance.json)
@@ -147,6 +154,7 @@ P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境�
 - [自主执行账本与表单保稿](docs/implementation/自主执行账本与表单保稿.md)
 - [网页来源版本刷新](docs/implementation/网页来源版本刷新.md)
 - [来源周期检查与 Xcode App 骨架](docs/implementation/来源周期检查与Xcode-App骨架.md)
+- [PostgreSQL 单一数据库迁移](docs/implementation/PostgreSQL单一数据库迁移.md)
 - [P3–P5 浏览器结果](docs/implementation/p3-p5-browser-results.json)
 - [UI 控件审查与优化](docs/implementation/UI控件审查与优化.md)
 - [Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)

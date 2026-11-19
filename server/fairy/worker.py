@@ -360,7 +360,10 @@ def main():
     if args.interval <= 0:
         parser.error("--interval must be greater than zero")
 
-    db = Store(os.getenv("FAIRY_DATABASE_URL", "sqlite:///var/fairy.db"))
+    database_url = os.getenv("FAIRY_DATABASE_URL")
+    if not database_url:
+        parser.error("FAIRY_DATABASE_URL is required")
+    db = Store(database_url)
     autonomy = AutonomyService(db)
     started_at = now()
     stopping = False

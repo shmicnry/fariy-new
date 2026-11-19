@@ -11,12 +11,19 @@ from fairy.app import create_app
 
 
 def main():
+    database_url = os.getenv("FAIRY_LIVE_POSTGRES_URL") or os.getenv(
+        "FAIRY_TEST_POSTGRES_URL"
+    )
+    if not database_url:
+        raise SystemExit(
+            "Set FAIRY_LIVE_POSTGRES_URL or FAIRY_TEST_POSTGRES_URL to a disposable PostgreSQL database"
+        )
     output = Path(
         os.getenv("FAIRY_LIVE_REPORT", "docs/implementation/p1-ollama-acceptance.json")
     )
     with tempfile.TemporaryDirectory(prefix="fairy-p1-live-") as directory:
         app = create_app(
-            "sqlite:///" + str(Path(directory) / "live.db"),
+            database_url,
             token="isolated-live-acceptance",
             secrets_dir=Path(directory) / "credentials",
         )

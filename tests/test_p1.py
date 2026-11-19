@@ -10,6 +10,7 @@ from fairy.app import create_app
 from fairy.model_settings import ModelConfig
 from fairy.models import LocalAnswer
 from fairy.store import Record
+from tests.db import postgres_url
 
 
 def local(reply="本地回答", outcome="answered", reason="none", memories=None):
@@ -53,7 +54,7 @@ def factory(tmp_path, monkeypatch):
     def make(handler=None):
         count[0] += 1
         app = create_app(
-            "sqlite:///" + str(tmp_path / (str(count[0]) + ".db")),
+            postgres_url(tmp_path),
             token="test",
             transport=httpx.MockTransport(handler or (lambda req: local())),
         )

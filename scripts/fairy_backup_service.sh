@@ -7,7 +7,7 @@ domain="gui/$(id -u)"
 app_support="${FAIRY_APP_SUPPORT:-$HOME/Library/Application Support/Fairy}"
 runtime="${FAIRY_BACKUP_RUNTIME:-$app_support/worker-runtime}"
 state_dir="${FAIRY_STATE_DIR:-$app_support/state}"
-database="${FAIRY_BACKUP_DATABASE:-$state_dir/fairy.db}"
+database="${FAIRY_DATABASE_URL:-postgresql+psycopg://$USER@127.0.0.1:5432/fairy}"
 backup_dir="${FAIRY_BACKUP_DIR:-$app_support/backups}"
 retention_days="${FAIRY_BACKUP_RETENTION_DAYS:-14}"
 wrapper="${FAIRY_BACKUP_WRAPPER:-$app_support/run-backup.sh}"
@@ -27,9 +27,9 @@ write_wrapper() {
 #!/bin/sh
 set -eu
 stamp=\$(date +%Y%m%d-%H%M%S)
-target="$backup_dir/fairy-\$stamp.db"
+target="$backup_dir/fairy-\$stamp.dump"
 "$python_path" -m fairy.maintenance backup "$database" "\$target"
-find "$backup_dir" -type f -name 'fairy-*.db' -mtime +$retention_days -delete
+find "$backup_dir" -type f -name 'fairy-*.dump' -mtime +$retention_days -delete
 EOF
     chmod 700 "$wrapper"
 }
@@ -79,7 +79,7 @@ case "$command_name" in
         ;;
     status)
         launchctl print "$domain/$label" 2>/dev/null || true
-        find "$backup_dir" -maxdepth 1 -type f -name 'fairy-*.db' -print | sort | tail -n 20
+        find "$backup_dir" -maxdepth 1 -type f -name 'fairy-*.dump' -print | sort | tail -n 20
         ;;
     uninstall)
         launchctl bootout "$domain/$label" >/dev/null 2>&1 || true

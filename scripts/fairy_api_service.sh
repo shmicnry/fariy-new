@@ -8,7 +8,7 @@ repo_root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 app_support="${FAIRY_APP_SUPPORT:-$HOME/Library/Application Support/Fairy}"
 runtime="${FAIRY_API_RUNTIME:-$app_support/worker-runtime}"
 state_dir="${FAIRY_STATE_DIR:-$app_support/state}"
-database_url="${FAIRY_DATABASE_URL:-sqlite:///$state_dir/fairy.db}"
+database_url="${FAIRY_DATABASE_URL:-postgresql+psycopg://$USER@127.0.0.1:5432/fairy}"
 port="${FAIRY_PORT:-8010}"
 token_file="${FAIRY_API_TOKEN_FILE:-$app_support/api-token}"
 wrapper="${FAIRY_API_WRAPPER:-$app_support/run-api.sh}"
@@ -45,7 +45,7 @@ export FAIRY_DATABASE_URL='$database_url'
 export FAIRY_MAC_BRIDGE_EXECUTABLE='$runtime/apps/mac-bridge/FairyMacBridge/.build/release/FairyMacBridge'
 export FAIRY_WHISPER_CLI='${FAIRY_WHISPER_CLI:-}'
 export FAIRY_WHISPER_MODEL='${FAIRY_WHISPER_MODEL:-}'
-exec '$python_path' -m uvicorn fairy.app:app --host 127.0.0.1 --port '$port'
+exec '$python_path' -m uvicorn fairy.asgi:app --host 127.0.0.1 --port '$port'
 EOF
     chmod 700 "$wrapper"
 }

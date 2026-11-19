@@ -9,7 +9,7 @@ plist="${FAIRY_LAUNCHD_PLIST:-$HOME/Library/LaunchAgents/$label.plist}"
 app_support="${FAIRY_APP_SUPPORT:-$HOME/Library/Application Support/Fairy}"
 runtime="${FAIRY_WORKER_RUNTIME:-$app_support/worker-runtime}"
 state_dir="${FAIRY_STATE_DIR:-$app_support/state}"
-database_url="${FAIRY_DATABASE_URL:-sqlite:///$state_dir/fairy.db}"
+database_url="${FAIRY_DATABASE_URL:-postgresql+psycopg://$USER@127.0.0.1:5432/fairy}"
 interval="${FAIRY_WORKER_INTERVAL:-2}"
 log_dir="${FAIRY_LOG_DIR:-$HOME/Library/Logs/Fairy}"
 dry_run="${FAIRY_LAUNCHD_DRY_RUN:-0}"
@@ -41,17 +41,6 @@ sync_runtime() {
     for editable in "$runtime"/.venv/lib/python*/site-packages/__editable__.*.pth; do
         [ -f "$editable" ] && printf '%s\n' "$runtime/server" >"$editable"
     done
-    if [ ! -f "$state_dir/fairy.db" ] && [ -f "$repo_root/var/fairy.db" ]; then
-        "$source_python" - "$repo_root/var/fairy.db" "$state_dir/fairy.db" <<'PY'
-import sqlite3
-import sys
-
-source, target = sys.argv[1:]
-with sqlite3.connect(source) as original, sqlite3.connect(target) as backup:
-    original.backup(backup)
-PY
-        chmod 600 "$state_dir/fairy.db"
-    fi
     if [ ! -d "$state_dir/credentials" ] && [ -d "$repo_root/var/credentials" ]; then
         ditto "$repo_root/var/credentials" "$state_dir/credentials"
     fi
