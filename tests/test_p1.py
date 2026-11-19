@@ -295,6 +295,53 @@ def test_daily_cloud_request_limit_counts_attempts(factory):
     assert sum(req.url.host == "provider.test" for req in seen) == 1
 
 
+def test_cloud_usage_is_priced_and_settled(factory):
+    def handler(req):
+        return (
+            local("需要帮助", "needs_cloud", "capability_limit")
+            if req.url.host == "127.0.0.1"
+            else cloud()
+        )
+
+    app, c = factory(handler)
+    enable(
+        c,
+        cloud_currency="USD",
+        cloud_input_cents_per_million=1,
+        cloud_output_cents_per_million=2,
+    )
+    result = post(c, "turns", {"text": "计价问题"}).json()
+    assert result["model_route"]["cloud_used"] is True
+    invocation = next(
+        row
+        for row in c.get("/v2/models/invocations").json()
+        if row["phase"] == "cloud"
+    )
+    assert invocation["charge_status"] == "settled"
+    assert invocation["cost_microcents"] == 50
+    budget = c.get("/v2/models/budget").json()
+    assert budget["used_microcents"] == 50
+    assert budget["currency"] == "USD"
+
+
+def test_cloud_cost_limit_blocks_before_egress(factory):
+    seen = []
+
+    def handler(req):
+        seen.append(req)
+        return local("需要帮助", "needs_cloud", "capability_limit")
+
+    app, c = factory(handler)
+    enable(
+        c,
+        cloud_output_cents_per_million=1_000_000,
+        cloud_daily_cost_limit_cents=1,
+    )
+    result = post(c, "turns", {"text": "昂贵问题"}).json()
+    assert result["model_route"]["cloud_skip_reason"] == "cloud_daily_cost_limit_reached"
+    assert all(req.url.host == "127.0.0.1" for req in seen)
+
+
 def test_model_config_cas_and_credentials_are_write_only(factory):
     app, c = factory()
     r = enable(c)

@@ -34,7 +34,9 @@ xcodebuild -project FairyApp.xcodeproj -scheme FairyApp \
 
 The Xcode target uses `Config/Fairy-Info.plist`, an empty iOS entitlements file,
 and an App Sandbox entitlement with outbound network access for macOS. It
-builds un-signed for simulator and local verification.
+builds un-signed for simulator and local verification. `Assets.xcassets`
+contains a complete iPhone, iPad and macOS AppIcon set generated from the Fairy
+SVG, with no alpha channel.
 
 The default local API address is `http://127.0.0.1:8010`. Opening a physical
 iPhone requires a trusted HTTPS address. Fairy defaults to loopback-only Host

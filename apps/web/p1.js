@@ -10,6 +10,7 @@ const errors = {
     cloud_disabled: '云副模型尚未启用。',
     cloud_not_configured: '请先补全云副模型的地址、模型名和密钥。',
     cloud_daily_limit_reached: '今天的云调用次数已达到设置上限。',
+    cloud_daily_cost_limit_reached: '今天的云费用预留已达到设置上限。',
     cloud_timeout: '云请求超时，费用状态未知；系统没有自动重试。',
     cloud_http_error: '云服务拒绝了请求，请核对配置与服务商状态。',
     cloud_unavailable: '云服务暂时不可用。',
@@ -28,7 +29,7 @@ const errors = {
     inference_outcome_unknown: '上次模型请求因进程中断而结果未知；系统没有自动重试。'
 };
 export const explain = code => errors[code] || code;
-const fields = ['ollama_base_url', 'ollama_model', 'local_timeout_seconds', 'local_context_window', 'local_max_output_tokens', 'memory_mode', 'cloud_enabled', 'cloud_base_url', 'cloud_model', 'cloud_context', 'cloud_timeout_seconds', 'cloud_max_output_tokens', 'cloud_daily_request_limit', 'fallback_on'];
+const fields = ['ollama_base_url', 'ollama_model', 'local_timeout_seconds', 'local_context_window', 'local_max_output_tokens', 'memory_mode', 'cloud_enabled', 'cloud_base_url', 'cloud_model', 'cloud_context', 'cloud_timeout_seconds', 'cloud_max_output_tokens', 'cloud_daily_request_limit', 'cloud_currency', 'cloud_input_cents_per_million', 'cloud_output_cents_per_million', 'cloud_daily_cost_limit_cents', 'fallback_on'];
 
 function field(ui, parent, title, value = '', type = 'text') {
     const label = ui.el('label', title, 'field');
@@ -127,6 +128,44 @@ export async function renderModels(ui) {
     quota.min = 0;
     quota.max = 1000;
     cloud.append(ui.el('p', '失败或超时的云请求也计入次数。次数上限不等于金额上限。', 'muted'));
+    const currency = field(ui, cloud, '计价币种', cfg.cloud_currency || 'USD');
+    const inputPrice = field(
+        ui,
+        cloud,
+        '输入价格 / 百万 Token',
+        (cfg.cloud_input_cents_per_million || 0) / 100,
+        'number'
+    );
+    inputPrice.min = 0;
+    inputPrice.step = '0.0001';
+    const outputPrice = field(
+        ui,
+        cloud,
+        '输出价格 / 百万 Token',
+        (cfg.cloud_output_cents_per_million || 0) / 100,
+        'number'
+    );
+    outputPrice.min = 0;
+    outputPrice.step = '0.0001';
+    const costLimit = field(
+        ui,
+        cloud,
+        '每日云费用上限',
+        (cfg.cloud_daily_cost_limit_cents || 0) / 100,
+        'number'
+    );
+    costLimit.min = 0;
+    costLimit.step = '0.01';
+    const budget = await ui.api('models/budget');
+    const usedAmount = budget.used_microcents / 100_000_000;
+    const limitAmount = budget.daily_cost_limit_cents / 100;
+    cloud.append(ui.el(
+        'p',
+        budget.daily_cost_limit_cents
+            ? `今日已预留/结算 ${usedAmount.toFixed(6)} / ${limitAmount.toFixed(2)} ${budget.currency}`
+            : `今日已预留/结算 ${usedAmount.toFixed(6)} ${budget.currency}，未设置金额上限`,
+        'muted'
+    ));
     const triggers = ui.panel('何时请副模型协助');
     const selected = [];
     const labels = {
@@ -155,6 +194,10 @@ export async function renderModels(ui) {
             cloud_model: model.value.trim(),
             cloud_context: context.value,
             cloud_daily_request_limit: Number(quota.value),
+            cloud_currency: currency.value.trim().toUpperCase(),
+            cloud_input_cents_per_million: Math.round(Number(inputPrice.value) * 100),
+            cloud_output_cents_per_million: Math.round(Number(outputPrice.value) * 100),
+            cloud_daily_cost_limit_cents: Math.round(Number(costLimit.value) * 100),
             fallback_on: selected.filter(([, input]) => input.checked).map(([value]) => value),
             clear_cloud_key: clear.checked
         });
@@ -169,7 +212,18 @@ export async function renderModels(ui) {
     }), status);
     const journal = ui.panel('最近的模型调用');
     const rows = await ui.api('models/invocations?limit=10');
-    for (const r of rows.reverse()) journal.append(ui.el('p', (r.phase === 'local' ? '本机' : '云端') + ' · ' + r.model + ' · ' + r.status + (r.reason ? ' · ' + r.reason : '')));
+    for (const r of rows.reverse()) journal.append(ui.el(
+        'p',
+        (r.phase === 'local' ? '本机' : '云端')
+            + ' · '
+            + r.model
+            + ' · '
+            + r.status
+            + (r.cost_microcents !== undefined
+                ? ' · ' + (r.cost_microcents / 100_000_000).toFixed(6) + ' ' + (r.cloud_currency || '')
+                : '')
+            + (r.reason ? ' · ' + r.reason : '')
+    ));
     if (!rows.length) journal.append(ui.el('p', '还没有发出模型请求。', 'muted'));
     const retrieval = ui.panel('本地语义检索');
     retrieval.append(

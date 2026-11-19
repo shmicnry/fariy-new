@@ -160,7 +160,52 @@ class ModelRouter:
                 "error": "ollama_unavailable",
             }
 
-    def reserve(self, turn_id, phase, conf, snapshot, reason):
+    def _cloud_usage(self, session):
+        today = datetime.now(timezone.utc).date().isoformat()
+        invocations = [
+            json.loads(row.payload)
+            for row in self.service.rows(session, "model_invocation")
+            if row.created_at.startswith(today)
+            and json.loads(row.payload).get("phase") == "cloud"
+        ]
+        used = 0
+        for data in invocations:
+            if data.get("charge_status") == "settled":
+                used += max(0, int(data.get("cost_microcents", 0)))
+            else:
+                used += max(0, int(data.get("reserved_microcents", 0)))
+        return {
+            "used_microcents": used,
+            "requests": len(invocations),
+            "unknown_charges": sum(
+                data.get("charge_status") == "unknown" for data in invocations
+            ),
+        }
+
+    def cloud_budget(self):
+        conf = self.settings.runtime()
+        with self.db.sessions() as session:
+            usage = self._cloud_usage(session)
+        limit = int(conf.get("cloud_daily_cost_limit_cents", 0)) * 1000
+        return {
+            **usage,
+            "currency": conf.get("cloud_currency", "USD"),
+            "daily_cost_limit_cents": limit // 1000,
+            "remaining_microcents": (
+                max(0, limit - usage["used_microcents"]) if limit else None
+            ),
+            "request_limit": int(conf.get("cloud_daily_request_limit", 10)),
+        }
+
+    def reserve(
+        self,
+        turn_id,
+        phase,
+        conf,
+        snapshot,
+        reason,
+        estimated_input_tokens=0,
+    ):
         with self.db.tx() as s:
             turn = self.service.get(s, turn_id)
             if turn.kind not in ("turn", "assessment_attempt"):
@@ -185,14 +230,30 @@ class ModelRouter:
             ):
                 raise ModelError("invocation_already_dispatched")
             if phase == "cloud":
-                today = datetime.now(timezone.utc).date().isoformat()
-                used = sum(
-                    json.loads(r.payload).get("phase") == "cloud"
-                    and r.created_at.startswith(today)
-                    for r in rows
-                )
-                if used >= conf["cloud_daily_request_limit"]:
+                usage = self._cloud_usage(s)
+                if usage["requests"] >= int(conf.get("cloud_daily_request_limit", 10)):
                     raise ModelError("cloud_daily_limit_reached")
+                input_price = int(
+                    conf.get("cloud_input_cents_per_million", 0)
+                )
+                output_price = int(
+                    conf.get("cloud_output_cents_per_million", 0)
+                )
+                reserved_microcents = (
+                    max(0, int(estimated_input_tokens)) * input_price
+                    + int(conf.get("cloud_max_output_tokens", 1024)) * output_price
+                )
+                cost_limit_microcents = (
+                    int(conf.get("cloud_daily_cost_limit_cents", 0)) * 1000
+                )
+                if (
+                    cost_limit_microcents
+                    and usage["used_microcents"] + reserved_microcents
+                    > cost_limit_microcents
+                ):
+                    raise ModelError("cloud_daily_cost_limit_reached")
+            else:
+                reserved_microcents = 0
             r = self.db.add(
                 s,
                 "owner",
@@ -221,6 +282,27 @@ class ModelRouter:
                     ).isoformat(),
                     "charge_status": (
                         "not_applicable" if phase == "local" else "unknown"
+                    ),
+                    "reserved_microcents": reserved_microcents,
+                    "estimated_input_tokens": (
+                        max(0, int(estimated_input_tokens))
+                        if phase == "cloud"
+                        else 0
+                    ),
+                    "cloud_currency": (
+                        conf.get("cloud_currency", "USD")
+                        if phase == "cloud"
+                        else None
+                    ),
+                    "input_cents_per_million": (
+                        conf.get("cloud_input_cents_per_million", 0)
+                        if phase == "cloud"
+                        else 0
+                    ),
+                    "output_cents_per_million": (
+                        conf.get("cloud_output_cents_per_million", 0)
+                        if phase == "cloud"
+                        else 0
                     ),
                 },
                 "started",
@@ -257,6 +339,22 @@ class ModelRouter:
                     and not isinstance(v, bool)
                     and v >= 0
                 }
+            if d.get("phase") == "cloud":
+                usage = d.get("usage", {})
+                prompt_tokens = usage.get("prompt_tokens")
+                completion_tokens = usage.get("completion_tokens")
+                if isinstance(prompt_tokens, int) and isinstance(
+                    completion_tokens, int
+                ):
+                    d["cost_microcents"] = (
+                        prompt_tokens * int(d.get("input_cents_per_million", 0))
+                        + completion_tokens
+                        * int(d.get("output_cents_per_million", 0))
+                    )
+                    d["charge_status"] = "settled"
+                else:
+                    d["cost_microcents"] = int(d.get("reserved_microcents", 0))
+                    d["charge_status"] = "unknown"
             r.payload = json.dumps(d)
             self.db.emit(
                 s,
@@ -382,9 +480,19 @@ class ModelRouter:
                 }
             )
         messages.append({"role": "user", "content": text})
-        if sum(len(m["content"].encode()) for m in messages) > 24000:
+        estimated_input_tokens = sum(
+            len(m["content"].encode()) for m in messages
+        )
+        if estimated_input_tokens > 24000:
             raise ModelError("cloud_input_too_large")
-        invocation = self.reserve(turn_id, "cloud", conf, snapshot, reason)
+        invocation = self.reserve(
+            turn_id,
+            "cloud",
+            conf,
+            snapshot,
+            reason,
+            estimated_input_tokens=estimated_input_tokens,
+        )
         try:
             data = await self._json(
                 conf["cloud_base_url"] + "/chat/completions",

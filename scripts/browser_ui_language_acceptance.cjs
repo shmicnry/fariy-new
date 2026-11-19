@@ -186,6 +186,17 @@ async function request(path, method = 'GET', body) {
     assert.equal(await experimentField.inputValue(), experimentDraft);
     assert.equal(await page.locator('#syncNotice').isVisible(), true);
 
+    await page.locator('#nav a[href="#models"]').click();
+    await page.getByLabel('输入价格 / 百万 Token').fill('1.25');
+    await page.getByLabel('输出价格 / 百万 Token').fill('2.5');
+    await page.getByLabel('每日云费用上限').fill('5');
+    await page.getByRole('button', {name: '保存模型与路由', exact: true}).click();
+    await page.locator('.toast').filter({hasText: '保存模型与路由已完成'}).waitFor();
+    const modelConfig = await request('models/config');
+    assert.equal(modelConfig.cloud_input_cents_per_million, 125);
+    assert.equal(modelConfig.cloud_output_cents_per_million, 250);
+    assert.equal(modelConfig.cloud_daily_cost_limit_cents, 500);
+
     await page.setViewportSize({width: 390, height: 844});
     assert.equal(await resizer.isVisible(), false);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
@@ -209,6 +220,7 @@ async function request(path, method = 'GET', body) {
                 'autonomy settings preserve Mac execution scope',
                 'source refresh settings survive unrelated saves',
                 'draft survives background event refresh',
+                'cloud token pricing and daily cost limit save',
                 'iPhone layout has no horizontal overflow',
                 'no browser runtime errors',
             ],

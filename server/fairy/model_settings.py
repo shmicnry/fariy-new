@@ -32,6 +32,10 @@ class ModelConfig(BaseModel):
     cloud_timeout_seconds: int = Field(default=60, ge=5, le=120)
     cloud_max_output_tokens: int = Field(default=1024, ge=128, le=4096)
     cloud_daily_request_limit: int = Field(default=10, ge=0, le=1000)
+    cloud_currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
+    cloud_input_cents_per_million: int = Field(default=0, ge=0, le=10_000_000)
+    cloud_output_cents_per_million: int = Field(default=0, ge=0, le=10_000_000)
+    cloud_daily_cost_limit_cents: int = Field(default=0, ge=0, le=1_000_000_000)
     fallback_on: list[
         Literal[
             "capability_limit",
@@ -128,6 +132,12 @@ class ModelConfig(BaseModel):
             raise ValueError("不能同时保存与清除密钥")
         if self.local_max_output_tokens + 2048 >= self.local_context_window:
             raise ValueError("本地上下文窗口必须为输入留出空间")
+        if (
+            self.cloud_daily_cost_limit_cents
+            and not self.cloud_input_cents_per_million
+            and not self.cloud_output_cents_per_million
+        ):
+            raise ValueError("设置云端金额上限前请填写 Token 单价")
         return self
 
 

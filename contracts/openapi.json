@@ -253,6 +253,44 @@
         }
       }
     },
+    "/models/budget": {
+      "get": {
+        "summary": "Model Budget",
+        "operationId": "model_budget_models_budget_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/turns": {
       "post": {
         "summary": "Turn",
@@ -4802,6 +4840,33 @@
             "minimum": 0.0,
             "title": "Cloud Daily Request Limit",
             "default": 10
+          },
+          "cloud_currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "title": "Cloud Currency",
+            "default": "USD"
+          },
+          "cloud_input_cents_per_million": {
+            "type": "integer",
+            "maximum": 10000000.0,
+            "minimum": 0.0,
+            "title": "Cloud Input Cents Per Million",
+            "default": 0
+          },
+          "cloud_output_cents_per_million": {
+            "type": "integer",
+            "maximum": 10000000.0,
+            "minimum": 0.0,
+            "title": "Cloud Output Cents Per Million",
+            "default": 0
+          },
+          "cloud_daily_cost_limit_cents": {
+            "type": "integer",
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Cloud Daily Cost Limit Cents",
+            "default": 0
           },
           "fallback_on": {
             "items": {

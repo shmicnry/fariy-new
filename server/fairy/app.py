@@ -389,6 +389,10 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     def invocations(limit: int = Query(default=100, ge=1, le=1000)):
         return service.list("model_invocation")[-limit:]
 
+    @api.get("/models/budget")
+    def model_budget():
+        return router.cloud_budget()
+
     @api.post("/turns")
     async def turn(body: TurnInput, k=Depends(key)):
         r = service.start_turn(body.text, k, body.routing)
