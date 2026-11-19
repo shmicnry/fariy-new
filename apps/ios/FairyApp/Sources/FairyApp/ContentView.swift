@@ -21,6 +21,8 @@ final class FairyModel: ObservableObject {
     @Published var status = "未连接"
     @Published var notificationPermission = "未检查"
     @Published var isWorking = false
+    @Published var isLoading = false
+    @Published var hasLoaded = false
     @Published var showConnection = false
     @Published var lastError: String?
     private var api: FairyAPI?
@@ -70,6 +72,11 @@ final class FairyModel: ObservableObject {
 
     func refreshAll() async {
         guard let api else { return }
+        isLoading = true
+        defer {
+            isLoading = false
+            hasLoaded = true
+        }
         do {
             turns = try await api.turns()
         } catch {
@@ -297,8 +304,40 @@ struct ContentView: View {
         Group {
             #if os(macOS)
             NavigationSplitView {
-                List(MacSection.allCases, selection: $macSection) { section in
-                    Label(section.title, systemImage: section.symbol).tag(section)
+                VStack(spacing: 0) {
+                    List(selection: $macSection) {
+                        Section("工作") {
+                            Label(MacSection.conversation.title, systemImage: MacSection.conversation.symbol)
+                                .tag(MacSection.conversation)
+                            Label(MacSection.tasks.title, systemImage: MacSection.tasks.symbol)
+                                .tag(MacSection.tasks)
+                        }
+                        Section("认知") {
+                            Label(MacSection.memory.title, systemImage: MacSection.memory.symbol)
+                                .tag(MacSection.memory)
+                            Label(MacSection.learning.title, systemImage: MacSection.learning.symbol)
+                                .tag(MacSection.learning)
+                        }
+                        Section("能力") {
+                            Label(MacSection.autonomy.title, systemImage: MacSection.autonomy.symbol)
+                                .tag(MacSection.autonomy)
+                            Label(MacSection.skills.title, systemImage: MacSection.skills.symbol)
+                                .tag(MacSection.skills)
+                        }
+                    }
+                    Divider()
+                    Button {
+                        macSection = .settings
+                    } label: {
+                        Label(MacSection.settings.title, systemImage: MacSection.settings.symbol)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(macSection == .settings ? .primary : .secondary)
+                    .padding(8)
                 }
                 .navigationTitle("Fairy")
                 .navigationSplitViewColumnWidth(min: 190, ideal: 220)
@@ -311,12 +350,22 @@ struct ContentView: View {
                 ConversationView().tabItem { Label("对话", systemImage: "bubble.left.and.bubble.right") }.tag(0)
                 MemoryView().tabItem { Label("记忆", systemImage: "sparkles") }.tag(1)
                 LearningView().tabItem { Label("学习", systemImage: "book.pages") }.tag(2)
-                TasksView().tabItem { Label("任务", systemImage: "checklist") }.tag(3)
+                TasksView().tabItem {
+                    Label("任务", systemImage: "checklist")
+                        .symbolEffect(.bounce, value: model.approvals.filter { $0.decision == nil }.count)
+                }.tag(3)
                 SettingsView().tabItem { Label("设置", systemImage: "gearshape") }.tag(4)
             }
             #endif
         }
         .tint(Color(red: 0.14, green: 0.37, blue: 0.47))
+        .overlay {
+            if model.isLoading && !model.hasLoaded {
+                FairyLoadingView()
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: model.hasLoaded)
         .task {
             await model.restoreConnection()
             await model.refreshNotificationSettings()
@@ -351,6 +400,76 @@ struct ContentView: View {
         case .autonomy: AutonomyView()
         case .skills: SkillsView()
         case .settings: SettingsView()
+        }
+    }
+}
+
+private struct FairyLoadingView: View {
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.regularMaterial)
+                .ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 14) {
+                Text("正在读取真实状态")
+                    .font(.headline)
+                ForEach(0..<3, id: \.self) { index in
+                    FairySkeletonCard(index: index)
+                }
+                Spacer()
+            }
+            .padding(24)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("正在读取 Fairy 的真实状态")
+    }
+}
+
+private struct FairySkeletonCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweep = false
+    let index: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(.quaternary)
+                .frame(width: index == 0 ? 148 : 210, height: index == 0 ? 18 : 11)
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(.quaternary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 11)
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(.quaternary)
+                .frame(maxWidth: 320)
+                .frame(height: 11)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, minHeight: 132, alignment: .leading)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            GeometryReader { proxy in
+                if !reduceMotion {
+                    LinearGradient(
+                        colors: [.clear, .white.opacity(0.22), .clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: proxy.size.width * 0.55)
+                    .offset(x: sweep ? proxy.size.width * 1.05 : -proxy.size.width * 0.75)
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(.quaternary, lineWidth: 1)
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+                sweep = true
+            }
         }
     }
 }
@@ -438,12 +557,19 @@ struct ConversationView: View {
                         draft = ""
                         Task { await model.send(text) }
                     } label: {
-                        Image(systemName: model.isWorking ? "ellipsis" : "arrow.up")
-                            .font(.headline)
-                            .frame(width: 44, height: 44)
-                            .background(.tint, in: Circle())
-                            .foregroundStyle(.white)
-                            .symbolEffect(.pulse, value: model.isWorking)
+                        Group {
+                            if model.isWorking {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(.white)
+                            } else {
+                                Image(systemName: "arrow.up")
+                                    .font(.headline)
+                            }
+                        }
+                        .frame(width: 44, height: 44)
+                        .background(.tint, in: Circle())
+                        .foregroundStyle(.white)
                     }
                     .disabled(model.isWorking)
                     .keyboardShortcut(.return, modifiers: [.command])

@@ -25,6 +25,9 @@ let token = '',
 let eventRefresh = null;
 let routeDirty = false;
 let pendingUpdates = 0;
+let routeLoadingToken = 0;
+let routeLoadingTimer = null;
+let renderedUnread = null;
 const reminderTimers = new Map();
 const names = {
     overview: '运行总览',
@@ -41,15 +44,17 @@ const names = {
     pet: '桌宠与形象',
     cards: '卡片与通知',
     approvals: '待确认操作',
-    chat: '对话'
+    chat: '对话',
+    more: '更多'
 };
 const navGroups = [
     ['工作台', ['overview', 'chat']],
     ['认知', ['mind', 'world', 'memories', 'learning', 'assessments']],
     ['自主能力', ['evolution', 'flows', 'skills', 'mac']],
-    ['个人空间', ['pet', 'cards', 'approvals']],
-    ['系统', ['models']]
+    ['个人空间', ['pet', 'cards', 'approvals']]
 ];
+const systemNavGroup = ['系统', ['models']];
+const mobilePrimaryRoutes = new Set(['overview', 'chat', 'memories', 'learning']);
 const iconPaths = {
     overview: ['M4 10.5 12 4l8 6.5V20h-6v-6h-4v6H4z'],
     chat: ['M5 5.5h14v10H9l-4 3z'],
@@ -86,6 +91,37 @@ const icon = name => {
     }
     return svg;
 };
+const clearRouteSkeleton = () => {
+    routeLoadingToken += 1;
+    if (routeLoadingTimer) {
+        clearTimeout(routeLoadingTimer);
+        routeLoadingTimer = null;
+    }
+    document.querySelector('.route-skeleton')?.remove();
+};
+const beginRouteLoading = route => {
+    clearRouteSkeleton();
+    const marker = routeLoadingToken;
+    routeLoadingTimer = setTimeout(() => {
+        if (marker !== routeLoadingToken || $('content').childElementCount) return;
+        const skeleton = el('section', undefined, 'route-skeleton');
+        skeleton.setAttribute('role', 'status');
+        skeleton.setAttribute('aria-live', 'polite');
+        skeleton.setAttribute('aria-busy', 'true');
+        skeleton.setAttribute('aria-label', '正在读取' + (names[route] || 'Fairy') + '状态');
+        for (let i = 0; i < 3; i += 1) {
+            const card = el('div', undefined, 'skeleton-card');
+            card.append(
+                el('span', undefined, i === 0 ? 'skeleton-line skeleton-title' : 'skeleton-line'),
+                el('span', undefined, 'skeleton-line skeleton-copy'),
+                el('span', undefined, 'skeleton-line skeleton-copy skeleton-copy-short')
+            );
+            skeleton.append(card);
+        }
+        skeleton.append(el('span', '正在读取真实状态…', 'visually-hidden'));
+        $('content').append(skeleton);
+    }, 180);
+};
 async function apiResponse(path, method = 'GET', body) {
     const headers = {
         Authorization: 'Bearer ' + token
@@ -115,7 +151,8 @@ async function api(path, method = 'GET', body) {
     return response.json()
 }
 const panel = (title) => {
-    const p = el('section', undefined, 'panel');
+    clearRouteSkeleton();
+    const p = el('section', undefined, 'panel continuous-surface');
     const heading = el('h2');
     const value = String(title);
     const dot = value.lastIndexOf('.');
@@ -142,10 +179,15 @@ const button = (text, fn, variant) => {
     b.type = 'button';
     b.onclick = () => run(async () => {
         const original = b.textContent;
+        const width = Math.ceil(b.getBoundingClientRect().width);
+        if (width) b.style.minWidth = width + 'px';
         b.disabled = true;
         b.classList.add('is-loading');
         b.setAttribute('aria-busy', 'true');
-        b.textContent = '处理中…';
+        b.replaceChildren(
+            el('span', undefined, 'button-spinner'),
+            el('span', original)
+        );
         try {
             await fn();
             if (!/(查看|检索|读取|检测|查询|刷新|打开|选择|停止|中断)/.test(text)) {
@@ -155,6 +197,7 @@ const button = (text, fn, variant) => {
             b.disabled = false;
             b.classList.remove('is-loading');
             b.removeAttribute('aria-busy');
+            b.style.removeProperty('min-width');
             if (b.isConnected) b.textContent = original;
         }
     });
@@ -249,6 +292,12 @@ function saveNotifications() {
     const unread = notifications.filter(item => !item.read).length;
     badge.textContent = unread > 9 ? '9+' : String(unread);
     badge.hidden = unread === 0;
+    if (renderedUnread !== null && unread > renderedUnread && unread > 0) {
+        badge.classList.remove('badge-pop');
+        void badge.offsetWidth;
+        badge.classList.add('badge-pop');
+    }
+    renderedUnread = unread;
 }
 function addNotification(event, meta) {
     const id = String(event.seq || event.id || crypto.randomUUID());
@@ -407,8 +456,13 @@ function records(p, rows) {
         if (r.notes) row.append(el('p', r.notes));
         if (r.remind_at) row.append(el('p', '提醒时间：' + new Date(r.remind_at).toLocaleString(), 'muted'));
         if (r.executable === false) row.append(el('p', '知识条目，无执行权限', 'muted'));
-        const details = el('details');
-        details.append(el('summary', '查看来源与记录'), el('pre', JSON.stringify(r, null, 2)));
+        const details = el('details', undefined, 'record-disclosure');
+        const summary = el('summary');
+        summary.append(
+            el('span', '来源、状态与原始记录'),
+            el('span', Object.keys(r).length + ' 个字段', 'disclosure-meta')
+        );
+        details.append(summary, el('pre', JSON.stringify(r, null, 2)));
         row.append(details);
         p.append(row)
     }
@@ -423,8 +477,10 @@ async function render() {
     $('content').replaceChildren();
     document.querySelectorAll('nav a').forEach(a => {
         const selected = a.hash === '#' + route;
-        a.classList.toggle('active', selected);
-        if (selected) a.setAttribute('aria-current', 'page');
+        const overflowSelected = a.dataset.overflow !== undefined
+            && !mobilePrimaryRoutes.has(route);
+        a.classList.toggle('active', selected || overflowSelected);
+        if (selected || overflowSelected) a.setAttribute('aria-current', 'page');
         else a.removeAttribute('aria-current');
     });
     if (!token) {
@@ -444,6 +500,36 @@ async function render() {
         closeDialog,
         refresh: renderPreservingScroll
     };
+    beginRouteLoading(route);
+    try {
+        await renderRoute(route, ui);
+    } finally {
+        clearRouteSkeleton();
+    }
+}
+
+async function renderRoute(route, ui) {
+    if (route === 'more') {
+        const p = panel('更多');
+        p.append(ui.el('p', '更多入口按工作、认知、能力与系统分组。', 'muted'));
+        const primary = new Set(['overview', 'chat', 'memories', 'learning']);
+        for (const [title, routes] of [...navGroups, systemNavGroup]) {
+            const available = routes.filter(id => !primary.has(id));
+            if (!available.length) continue;
+            const group = ui.el('section', undefined, 'more-group');
+            group.append(ui.el('h3', title));
+            const links = ui.el('div', undefined, 'more-grid');
+            for (const id of available) {
+                const link = ui.el('a', undefined, 'more-link continuous-surface');
+                link.href = '#' + id;
+                link.append(icon(id), ui.el('span', names[id]));
+                links.append(link);
+            }
+            group.append(links);
+            p.append(group);
+        }
+        return;
+    }
     if (route === 'world') return renderKnowledge(ui);
     if (route === 'assessments') return renderAssessments(ui);
     if (route === 'models') return renderModels(ui);
@@ -782,18 +868,20 @@ async function render() {
         panel(names[route] || route).append(el('p', '该模块已有设计契约，运行能力尚未实现。不会执行 Mac 动作、自动发布代码或模拟成功。'))
     }
 }
-for (const [title, routes] of navGroups) {
+
+for (const [title, routes] of [...navGroups, systemNavGroup]) {
     const group = el('div', undefined, 'nav-group');
     group.setAttribute('role', 'group');
     group.setAttribute('aria-label', title);
     group.append(el('p', title, 'nav-group-title'));
+    const target = title === systemNavGroup[0] ? $('systemNav') : $('nav');
     for (const id of routes) {
         const a = el('a');
         a.href = '#' + id;
         a.append(icon(id), el('span', names[id]));
         group.append(a);
     }
-    $('nav').append(group);
+    target.append(group);
 }
 window.addEventListener('hashchange', () => run(render));
 $('login').onsubmit = e => {

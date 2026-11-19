@@ -4,8 +4,10 @@ This package is the native implementation starting point shared by macOS and iOS
 
 ## Current screens
 
-- macOS: `NavigationSplitView` with conversation, memory, learning, approvals, autonomy, skills and settings.
-- iOS: bottom `TabView`, large navigation titles, sheets, spring scrolling and success haptics.
+- macOS: `NavigationSplitView` with grouped work, cognition and capability sections; settings stay in a fixed utility region.
+- iOS: five-tab `TabView`, large navigation titles, sheets, scrolling and success haptics.
+- Initial API hydration uses structure-matched skeleton cards and respects Reduce Motion.
+- New approvals use a one-shot symbol bounce; pending work uses progress instead of looping pulse.
 - All screens use the same local Fairy API.
 - The owner token is stored in Keychain with device-only accessibility.
 - Memory correction/forgetting, course assessment, approvals, skill lifecycle and autonomy candidates are actionable from the native UI.

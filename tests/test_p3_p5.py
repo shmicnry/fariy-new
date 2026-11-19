@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import plistlib
+import re
 import subprocess
 import sys
 
@@ -716,7 +717,22 @@ def test_pwa_shell_is_served_and_does_not_cache_api(env):
     assert "url.pathname.startsWith('/v2/')" in worker.text
     assert "response.ok" in worker.text
     assert "event.request.mode === 'navigate'" in worker.text
-    assert "fairy-shell-v19" in worker.text
+    assert re.search(r"fairy-shell-v\d+", worker.text)
+
+    shell = client.get("/").text
+    assert 'class="sidebar-identity"' in shell
+    assert 'class="sidebar-scroll"' in shell
+    assert 'class="sidebar-utility"' in shell
+    assert 'data-overflow' in shell
+
+    styles = client.get("/assets/style.css").text
+    assert ".route-skeleton" in styles
+    assert "@supports (corner-shape: squircle)" in styles
+    assert "#systemNav a.active" in styles
+
+    app_script = client.get("/assets/app.js").text
+    assert "beginRouteLoading" in app_script
+    assert "continuous-surface" in app_script
 
 
 def test_local_voice_status_and_tts(env, monkeypatch):

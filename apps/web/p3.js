@@ -119,8 +119,13 @@ export async function renderMac(ui) {
     const apps = await api('mac/apps');
     const appPanel = panel('应用目录');
     appPanel.append(el('p', '只读取应用名称和路径；不会启动应用。', 'muted'));
-    const appDetails = el('details');
-    appDetails.append(el('summary', '查看 ' + apps.applications.length + ' 个应用的本地目录'));
+    const appDetails = el('details', undefined, 'record-disclosure');
+    const appSummary = el('summary');
+    appSummary.append(
+        el('span', '来源与本地应用目录'),
+        el('span', apps.applications.length + ' 个应用', 'disclosure-meta')
+    );
+    appDetails.append(appSummary);
     for (const app of apps.applications.slice(0, 30)) {
         appDetails.append(el('p', app.name + (app.allowed ? ' · 已列入允许范围' : '')));
     }

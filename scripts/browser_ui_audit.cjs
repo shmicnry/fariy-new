@@ -1,4 +1,5 @@
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -21,6 +22,7 @@ const routes = [
     'cards',
     'approvals',
     'chat',
+    'more',
 ];
 
 async function inspect(page, route, viewport) {
@@ -134,6 +136,43 @@ async function inspect(page, route, viewport) {
     await page.getByLabel('服务令牌').fill(token);
     await page.getByRole('button', {name: '连接', exact: true}).click();
     await page.getByText('已连接本机服务', {exact: true}).waitFor();
+    await page.locator('#content .panel').first().waitFor();
+
+    await page.setViewportSize({width: 1280, height: 720});
+    const fixedShell = await page.evaluate(() => {
+        const rect = selector => {
+            const value = document.querySelector(selector).getBoundingClientRect();
+            return {top: value.top, bottom: value.bottom, height: value.height};
+        };
+        const middle = document.querySelector('.sidebar-scroll');
+        return {
+            identity: rect('.sidebar-identity'),
+            middle: rect('.sidebar-scroll'),
+            utility: rect('.sidebar-utility'),
+            middleScrolls: middle.scrollHeight > middle.clientHeight,
+            continuousCorners: CSS.supports('corner-shape', 'squircle'),
+        };
+    });
+    assert.equal(fixedShell.identity.top, 0);
+    assert.equal(Math.round(fixedShell.utility.bottom), 720);
+    assert.equal(fixedShell.middleScrolls, true);
+    await page.setViewportSize({width: 1440, height: 1000});
+
+    await page.route('**/v2/config', async route => {
+        await new Promise(resolve => setTimeout(resolve, 650));
+        await route.continue();
+    });
+    await page.locator('#nav a[href="#evolution"]').click();
+    await page.waitForTimeout(240);
+    assert.equal(await page.locator('.route-skeleton').count(), 1);
+    await page.screenshot({
+        path: path.join(output, 'desktop-route-skeleton.png'),
+        fullPage: false,
+    });
+    await page.locator('#content .panel').first().waitFor();
+    await page.unroute('**/v2/config');
+    assert.equal(await page.locator('.route-skeleton').count(), 0);
+
     const requestHeaders = {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -193,6 +232,8 @@ async function inspect(page, route, viewport) {
             && results.every(item => item.activeCurrent)
             ? 'passed'
             : 'failed',
+        fixedShell,
+        skeletonDelayVerified: true,
         routes: results,
         browserErrors: errors,
     };
@@ -200,6 +241,7 @@ async function inspect(page, route, viewport) {
     console.log(JSON.stringify({
         output,
         pages: results.length,
+        fixedShell,
         browserErrors: errors,
         unnamed,
         tooSmall,

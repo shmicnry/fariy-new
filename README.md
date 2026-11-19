@@ -1,6 +1,6 @@
 # Fairy · fariy-new
 
-最新设计规范：[Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)，对应本地 Skill：`$fairy-ui-design`。
+最新设计规范：[Fairy UI 设计语言与交互规范 v1.1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)，对应本地 Skill：`$fairy-ui-design`。
 
 最新阶段：[模型测验草稿与人工确认](docs/implementation/模型测验草稿与人工确认.md)。本地 Ollama 可生成候选题，但必须由所有者核对、修改和确认后才可执行。
 
@@ -167,7 +167,7 @@ P1 基线 **62 项回归通过**；加入常驻服务、同步、语音、OCR、
 - [模型测验草稿与人工确认](docs/implementation/模型测验草稿与人工确认.md)
 - [P3–P5 浏览器结果](docs/implementation/p3-p5-browser-results.json)
 - [UI 控件审查与优化](docs/implementation/UI控件审查与优化.md)
-- [Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)
+- [Fairy UI 设计语言与交互规范 v1.1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)
 - [fairy-ui-design Skill](.agents/skills/fairy-ui-design/SKILL.md)
 - [UI 交互语言浏览器结果](docs/implementation/ui-language-browser-results.json)
 - [UI 控件浏览器审计结果](docs/implementation/ui-audit-browser-results.json)
