@@ -2,7 +2,9 @@
 
 最新设计规范：[Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)，对应本地 Skill：`$fairy-ui-design`。
 
-最新阶段：[云费用预算与原生图标](docs/implementation/云费用预算与原生图标.md)。云模型支持 Token 单价、派发前预留、实际结算和每日金额硬上限；iOS、iPad、macOS 与 PWA 已使用重新生成的无透明 Fairy 图标。
+最新阶段：[模型测验草稿与人工确认](docs/implementation/模型测验草稿与人工确认.md)。本地 Ollama 可生成候选题，但必须由所有者核对、修改和确认后才可执行。
+
+上一阶段：[云费用预算与原生图标](docs/implementation/云费用预算与原生图标.md)。云模型支持 Token 单价、派发前预留、实际结算和每日金额硬上限；iOS、iPad、macOS 与 PWA 已使用重新生成的无透明 Fairy 图标。
 
 上一阶段：[备份健康、扫描 PDF 与来源白名单](docs/implementation/备份健康、扫描PDF与来源白名单.md)。备份会执行自动恢复演练，扫描 PDF 支持逐页 Vision OCR，网页来源支持域名白名单和版本差异摘要。
 
@@ -14,7 +16,7 @@
 
 上一阶段：[自主执行账本与表单保稿](docs/implementation/自主执行账本与表单保稿.md)。自主目标现支持启动、暂停、继续、完成结算、取消释放和无上限时间自动停机；Web 与 SwiftUI 已同步。
 
-最新全量审计：[P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)。修复技能调用状态未持久化、自主页覆盖 Mac 授权、原生请求超时、PWA 离线回退、配置边界、Compose 端口和 CI PostgreSQL 缺口；加入执行账本、来源刷新、周期检查、OCR、备份演练与费用预算后 PostgreSQL 全量回归 **139 passed**。
+最新全量审计：[P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)。修复技能调用状态未持久化、自主页覆盖 Mac 授权、原生请求超时、PWA 离线回退、配置边界、Compose 端口和 CI PostgreSQL 缺口；加入执行账本、来源刷新、周期检查、OCR、备份演练、费用预算与模型草稿后 PostgreSQL 全量回归 **141 passed**。
 
 最新审计：[P2缺漏审计与修复](docs/implementation/P2审计修复.md)。修复文件幂等、学习结论撤销、精确最终依据、来源失效、测验取消和撤回入口等问题；最终在隔离 Postgres 16 上 **108 项回归全部通过**。
 
@@ -148,7 +150,7 @@ python scripts/export_contract.py
 python scripts/acceptance_ollama.py
 ```
 
-P1 基线 **62 项回归通过**；加入常驻服务、同步、语音、OCR、语义检索、原生操作、P3–P5 缺漏修复、自主执行账本、来源版本刷新、周期检查、PostgreSQL 单一库、备份恢复演练、扫描 PDF 与云费用预算后，在 PostgreSQL 16 上 **139 项全部通过，0 skipped**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
+P1 基线 **62 项回归通过**；加入常驻服务、同步、语音、OCR、语义检索、原生操作、P3–P5 缺漏修复、自主执行账本、来源版本刷新、周期检查、PostgreSQL 单一库、备份恢复演练、扫描 PDF、云费用预算与模型草稿后，在 PostgreSQL 16 上 **141 项全部通过，0 skipped**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
 
 - [P1 实施与验证记录](docs/implementation/P1-模型与记忆闭环.md)
 - [Ollama 实测结果](docs/implementation/p1-ollama-acceptance.json)
@@ -162,6 +164,7 @@ P1 基线 **62 项回归通过**；加入常驻服务、同步、语音、OCR、
 - [PostgreSQL 单一数据库迁移](docs/implementation/PostgreSQL单一数据库迁移.md)
 - [备份健康、扫描 PDF 与来源白名单](docs/implementation/备份健康、扫描PDF与来源白名单.md)
 - [云费用预算与原生图标](docs/implementation/云费用预算与原生图标.md)
+- [模型测验草稿与人工确认](docs/implementation/模型测验草稿与人工确认.md)
 - [P3–P5 浏览器结果](docs/implementation/p3-p5-browser-results.json)
 - [UI 控件审查与优化](docs/implementation/UI控件审查与优化.md)
 - [Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)

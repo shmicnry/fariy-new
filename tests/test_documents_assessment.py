@@ -89,6 +89,114 @@ def test_mixed_pdf_uses_ocr_only_for_blank_page(monkeypatch):
     assert result["ocr"] is True
 
 
+def test_model_quiz_draft_requires_owner_review(tmp_path, monkeypatch):
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "done": True,
+                "message": {
+                    "content": json.dumps(
+                        {
+                            "questions": [
+                                {
+                                    "question": "植物需要什么？",
+                                    "choices": ["水分", "火焰"],
+                                    "correct_index": 0,
+                                }
+                            ]
+                        },
+                        ensure_ascii=False,
+                    )
+                },
+            },
+        )
+
+    monkeypatch.setenv("FAIRY_OLLAMA_MODEL", "draft-fixture")
+    app = create_app(
+        postgres_url(tmp_path),
+        token="t",
+        transport=httpx.MockTransport(handler),
+    )
+    client = TestClient(app)
+    client.headers["Authorization"] = "Bearer t"
+    source = app.state.service.material(
+        "draft-source",
+        "植物需要水分。",
+        "draft-source",
+    )["material"]
+    response = client.post(
+        "/v2/learning/quizzes/drafts",
+        json={
+            "source_id": source["id"],
+            "title": "模型草稿",
+            "evidence": "植物需要水分。",
+            "question_count": 1,
+        },
+        headers={"Idempotency-Key": "draft"},
+    )
+    assert response.status_code == 200, response.text
+    draft = response.json()
+    assert draft["status"] == "pending_review"
+    assert draft["executable"] is False
+    assert client.get("/v2/learning/quizzes").json() == []
+
+    approved = client.post(
+        "/v2/learning/quizzes/drafts/" + draft["id"] + "/approve",
+        json={
+            "revision": draft["revision"],
+            "title": "人工确认题目",
+            "questions": [
+                {
+                    "question": "植物需要什么？",
+                    "choices": ["水分", "火焰"],
+                    "correct_index": 0,
+                }
+            ],
+        },
+        headers={"Idempotency-Key": "approve-draft"},
+    )
+    assert approved.status_code == 200, approved.text
+    quiz = approved.json()
+    assert quiz["title"] == "人工确认题目"
+    assert quiz["rubric"] == "owner_reviewed_model_draft"
+    assert len(seen) == 1
+    assert (
+        next(
+            item
+            for item in client.get("/v2/learning/quizzes/drafts").json()
+            if item["id"] == draft["id"]
+        )["status"]
+        == "approved"
+    )
+
+
+def test_model_quiz_draft_requires_exact_source_quote(tmp_path):
+    app = create_app(postgres_url(tmp_path), token="t")
+    client = TestClient(app)
+    client.headers["Authorization"] = "Bearer t"
+    source = app.state.service.material(
+        "draft-source",
+        "植物需要水分。",
+        "draft-source",
+    )["material"]
+    response = client.post(
+        "/v2/learning/quizzes/drafts",
+        json={
+            "source_id": source["id"],
+            "title": "错误草稿",
+            "evidence": "不存在的原文",
+            "question_count": 1,
+        },
+        headers={"Idempotency-Key": "draft-quote"},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "exact_source_quote_required"
+
+
 def test_docx_zip_expansion_refused():
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as z:

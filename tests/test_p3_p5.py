@@ -716,7 +716,7 @@ def test_pwa_shell_is_served_and_does_not_cache_api(env):
     assert "url.pathname.startsWith('/v2/')" in worker.text
     assert "response.ok" in worker.text
     assert "event.request.mode === 'navigate'" in worker.text
-    assert "fairy-shell-v18" in worker.text
+    assert "fairy-shell-v19" in worker.text
 
 
 def test_local_voice_status_and_tts(env, monkeypatch):

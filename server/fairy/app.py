@@ -17,7 +17,14 @@ from .model_settings import ModelSettings, ModelConfig
 from .models import ModelRouter
 from .learning import LearningService
 from .knowledge import KnowledgeService
-from .assessments import AssessmentService, QuizInput, RunInput
+from .assessments import (
+    AssessmentService,
+    DraftApproval,
+    DraftInput,
+    DraftReject,
+    QuizInput,
+    RunInput,
+)
 from .link_fetch import fetch_text, validate_url
 from .mac_bridge import MacBridge
 from .skills import SkillGrantInput, SkillInvokeInput, SkillService
@@ -345,6 +352,7 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "scheduled_source_refresh": True,
             "world_claims": True,
             "fixed_choice_assessments": True,
+            "model_quiz_drafts": True,
             "skills_registry": True,
             "mac_read_only": True,
             "mac_ax_tree_read_only": True,
@@ -536,6 +544,24 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     @api.post("/learning/quizzes")
     def create_quiz(body: QuizInput, k=Depends(key)):
         return AssessmentService(db).quiz(body, k)
+
+    @api.post("/learning/quizzes/drafts")
+    async def create_quiz_draft(body: DraftInput, k=Depends(key)):
+        return await AssessmentService(db).draft_quiz(body, k, router)
+
+    @api.get("/learning/quizzes/drafts")
+    def quiz_drafts():
+        return service.list("quiz_draft")
+
+    @api.post("/learning/quizzes/drafts/{id}/approve")
+    def approve_quiz_draft(id: str, body: DraftApproval, k=Depends(key)):
+        return AssessmentService(db).approve_draft(id, body, k)
+
+    @api.post("/learning/quizzes/drafts/{id}/reject")
+    def reject_quiz_draft(id: str, body: DraftReject):
+        return AssessmentService(db).reject_draft(
+            id, body.revision, body.reason
+        )
 
     @api.get("/learning/quizzes")
     def quizzes():

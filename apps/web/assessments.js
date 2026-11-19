@@ -81,6 +81,111 @@ export async function renderAssessments(ui) {
         });
         await ui.refresh()
     }));
+
+    const drafts = panel('模型测题草稿');
+    drafts.append(el(
+        'p',
+        '本地模型只生成候选题。你必须核对原文、修改答案并确认后，草稿才会变成可执行测验。',
+        'muted'
+    ));
+    const draftTitle = make(drafts, '草稿标题'),
+        draftEvidence = make(drafts, '草稿原文依据'),
+        draftCount = make(drafts, '生成题目数量');
+    draftCount.type = 'number';
+    draftCount.min = 1;
+    draftCount.max = 5;
+    draftCount.value = 3;
+    const draftSourceLabel = el('label', '草稿材料', 'field');
+    const draftSource = el('select');
+    draftSource.setAttribute('aria-label', '草稿材料');
+    for (const material of sourceMaterials) {
+        const option = el('option', material.title);
+        option.value = material.id;
+        option.disabled = !material.source_eligible;
+        draftSource.append(option);
+    }
+    if (firstEligible) draftSource.value = source.value;
+    draftSourceLabel.append(draftSource);
+    drafts.append(
+        draftSourceLabel,
+        button('生成待审阅草稿', async () => {
+            const result = await api('learning/quizzes/drafts', 'POST', {
+                source_id: draftSource.value,
+                title: draftTitle.value,
+                evidence: draftEvidence.value,
+                question_count: Number(draftCount.value),
+            });
+            if (result.status === 'failed') {
+                throw Error('草稿生成失败：' + explain(result.error));
+            }
+            await ui.refresh();
+        })
+    );
+    for (const draft of await api('learning/quizzes/drafts')) {
+        if (draft.status !== 'pending_review') continue;
+        const row = el('article', undefined, 'memory-row');
+        const reviewTitle = el('input');
+        reviewTitle.value = draft.title;
+        reviewTitle.setAttribute('aria-label', '草稿确认标题');
+        const reviewQuestions = el('textarea');
+        reviewQuestions.value = JSON.stringify(
+            draft.questions.map(({question, choices, correct_index}) => ({
+                question,
+                choices,
+                correct_index,
+            })),
+            null,
+            2
+        );
+        reviewQuestions.setAttribute('aria-label', '草稿题目核对');
+        row.append(
+            el('h3', draft.title),
+            el('p', '模型 ' + draft.model + ' · 待人工审阅 · 尚不可执行', 'route-note'),
+            el('blockquote', draft.evidence),
+            el('label', '草稿确认标题', 'field'),
+            el('label', '草稿题目核对', 'field')
+        );
+        row.querySelectorAll('label')[0].append(reviewTitle);
+        row.querySelectorAll('label')[1].append(reviewQuestions);
+        row.append(
+            button('确认并创建测验', async () => {
+                let questions;
+                try {
+                    questions = JSON.parse(reviewQuestions.value);
+                } catch {
+                    throw Error('草稿题目 JSON 格式不正确');
+                }
+                await api(
+                    'learning/quizzes/drafts/' + draft.id + '/approve',
+                    'POST',
+                    {
+                        revision: draft.revision,
+                        title: reviewTitle.value,
+                        questions,
+                    }
+                );
+                await ui.refresh();
+            }),
+            confirmButton(
+                '拒绝这份草稿',
+                '拒绝模型草稿',
+                '拒绝后不能执行，也不会创建测验。',
+                async () => {
+                    await api(
+                        'learning/quizzes/drafts/' + draft.id + '/reject',
+                        'POST',
+                        {
+                            revision: draft.revision,
+                            reason: 'owner_rejected_model_draft',
+                        }
+                    );
+                    await ui.refresh();
+                },
+                'secondary'
+            )
+        );
+        drafts.append(row);
+    }
     const quizzes = panel('本机作答');
     for (const q of await api('learning/quizzes')) {
         const row = el('article', undefined, 'memory-row');

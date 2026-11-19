@@ -26,6 +26,9 @@ const errors = {
     practice_not_currently_passed: '最近一次练习评定未通过，不能归纳为习得知识。',
     exact_source_quote_required: '请填写材料中的逐字原文依据。',
     course_not_ready: '材料尚未读完或当前阶段不能提交此操作。',
+    invalid_quiz_draft: '本地模型生成的题目结构不完整，请重新生成。',
+    quiz_draft_snapshot_invalidated: '生成题目期间来源发生变化，这份草稿已失效。',
+    quiz_draft_already_changed: '草稿已被其他操作修改，请刷新后重试。',
     inference_outcome_unknown: '上次模型请求因进程中断而结果未知；系统没有自动重试。'
 };
 export const explain = code => errors[code] || code;

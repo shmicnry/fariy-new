@@ -8,6 +8,8 @@
     "fixed quiz creation",
     "real local Ollama open-book run",
     "real local Ollama closed-book run",
+    "real local model quiz draft",
+    "owner-edited draft approval",
     "deterministic score display",
     "no browser errors"
   ],

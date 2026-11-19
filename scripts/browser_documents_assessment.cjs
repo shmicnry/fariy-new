@@ -87,6 +87,36 @@ const fs = require('node:fs');
         name: '测验结果',
         exact: true
     }).waitFor();
+
+    await page.getByLabel('草稿标题').fill('Model draft');
+    await page.getByLabel('草稿材料').selectOption(source.id);
+    await page.getByLabel('草稿原文依据').fill('The code of Cedar is VELIN.');
+    await page.getByLabel('生成题目数量').fill('1');
+    await page.getByRole('button', {
+        name: '生成待审阅草稿',
+        exact: true
+    }).click();
+    await page.getByRole('button', {
+        name: '确认并创建测验',
+        exact: true
+    }).waitFor();
+    await page.getByLabel('草稿确认标题').fill('Reviewed model draft');
+    await page.getByLabel('草稿题目核对').fill(JSON.stringify([
+        {
+            question: 'What is the code of Cedar?',
+            choices: ['XERON', 'VELIN'],
+            correct_index: 1
+        }
+    ]));
+    await page.getByRole('button', {
+        name: '确认并创建测验',
+        exact: true
+    }).click();
+    await page.getByRole('heading', {
+        name: 'Reviewed model draft',
+        exact: true
+    }).waitFor();
+
     const runs = await api('learning/assessment-runs');
     assert.equal(runs.length, 2);
     assert.ok(runs.every(x => x.status === 'completed' && !x.generalization_verified));
@@ -95,7 +125,7 @@ const fs = require('node:fs');
     fs.writeFileSync('docs/implementation/document-assessment-browser.json', JSON.stringify({
         status: 'passed',
         model: runs[0].model,
-        checks: ['real DOCX upload', 'isolated paragraph extraction', 'worker', 'fixed quiz creation', 'real local Ollama open-book run', 'real local Ollama closed-book run', 'deterministic score display', 'no browser errors'],
+        checks: ['real DOCX upload', 'isolated paragraph extraction', 'worker', 'fixed quiz creation', 'real local Ollama open-book run', 'real local Ollama closed-book run', 'real local model quiz draft', 'owner-edited draft approval', 'deterministic score display', 'no browser errors'],
         scores: runs.map(r => ({
             mode: r.mode,
             correct_count: r.correct_count,

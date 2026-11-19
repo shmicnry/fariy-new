@@ -208,9 +208,12 @@ class ModelRouter:
     ):
         with self.db.tx() as s:
             turn = self.service.get(s, turn_id)
-            if turn.kind not in ("turn", "assessment_attempt"):
+            if turn.kind not in ("turn", "assessment_attempt", "quiz_draft"):
                 raise ModelError("invalid_dispatch_parent")
-            if turn.status != "pending":
+            expected_status = (
+                "generating" if turn.kind == "quiz_draft" else "pending"
+            )
+            if turn.status != expected_status:
                 raise ModelError("turn_no_longer_pending")
             for id, revision in snapshot.items():
                 r = s.get(Record, id)
