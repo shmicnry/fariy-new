@@ -4301,6 +4301,25 @@
             "minimum": 0.0,
             "title": "Autonomy Daily Items",
             "default": 10
+          },
+          "source_refresh_enabled": {
+            "type": "boolean",
+            "title": "Source Refresh Enabled",
+            "default": false
+          },
+          "source_refresh_interval_hours": {
+            "type": "integer",
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Source Refresh Interval Hours",
+            "default": 24
+          },
+          "source_refresh_daily_limit": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Source Refresh Daily Limit",
+            "default": 5
           }
         },
         "additionalProperties": false,

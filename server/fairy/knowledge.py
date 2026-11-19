@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from .learning import LearningService
 from .service import fail
 from .store import view, now
@@ -113,8 +113,63 @@ class KnowledgeService(LearningService):
             imp.payload = json.dumps(
                 {"url": url, "material_id": r.id, "course_id": result["course"]["id"]}
             )
+            self.db.add(
+                s,
+                "owner",
+                "source_refresh_schedule",
+                {
+                    "source_id": r.id,
+                    "next_check_at": (
+                        datetime.now(timezone.utc) + timedelta(hours=24)
+                    ).isoformat(),
+                    "consecutive_failures": 0,
+                    "last_status": "scheduled",
+                },
+            )
             self.db.emit(s, "owner", "learning.link_imported", {"id": imp.id})
             return view(imp)
+
+    def _move_refresh_schedule(self, session, old_source_id, new_source_id):
+        configs = self.rows(session, "config")
+        interval = (
+            json.loads(configs[0].payload).get("source_refresh_interval_hours", 24)
+            if configs
+            else 24
+        )
+        current = datetime.now(timezone.utc)
+        has_replacement = any(
+            row.status == "active"
+            and json.loads(row.payload).get("source_id") == new_source_id
+            for row in self.rows(session, "source_refresh_schedule")
+        )
+        for schedule in self.rows(session, "source_refresh_schedule"):
+            payload = json.loads(schedule.payload)
+            if (
+                schedule.status == "active"
+                and payload.get("source_id") == old_source_id
+            ):
+                payload.update(
+                    next_check_at=None,
+                    replacement_source_id=new_source_id,
+                    last_status="version_created",
+                )
+                schedule.status = "invalidated"
+                schedule.revision += 1
+                schedule.payload = json.dumps(payload)
+        if not has_replacement:
+            self.db.add(
+                session,
+                "owner",
+                "source_refresh_schedule",
+                {
+                    "source_id": new_source_id,
+                    "next_check_at": (
+                        current + timedelta(hours=int(interval))
+                    ).isoformat(),
+                    "consecutive_failures": 0,
+                    "last_status": "version_created",
+                },
+            )
 
     def refresh_source(self, id, revision, key, collector):
         body = {"op": "source.refresh", "source_id": id, "revision": revision}
@@ -245,6 +300,7 @@ class KnowledgeService(LearningService):
                 new_source_id=new_material["id"],
                 new_course_id=material_result["course"]["id"],
             )
+            self._move_refresh_schedule(s, id, new_material["id"])
             current.status = "completed"
             current.revision += 1
             current.payload = json.dumps(payload)

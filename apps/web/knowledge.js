@@ -4,6 +4,7 @@ export async function renderKnowledge(ui) {
         api,
         panel,
         button,
+        controlLabel,
         confirmButton
     } = ui;
     const field = (p, label) => {
@@ -26,11 +27,60 @@ export async function renderKnowledge(ui) {
         if (result.status === 'failed') throw Error('网页获取失败，请检查地址、重定向、格式或网络后用新的提交重试');
         await ui.refresh()
     }));
+    const sourceConfigs = await api('config');
+    const sourceConfig = sourceConfigs[0] || {revision: 0};
+    const refreshSettings = panel('自动来源检查');
+    const refreshEnabled = el('input');
+    refreshEnabled.type = 'checkbox';
+    refreshEnabled.checked = Boolean(sourceConfig.source_refresh_enabled);
+    refreshEnabled.setAttribute('aria-label', '启用自动网页来源检查');
+    const refreshToggle = el('label', undefined, 'check');
+    refreshToggle.append(refreshEnabled, el('span', '按计划检查已登记的网页来源'));
+    const refreshInterval = el('input');
+    refreshInterval.type = 'number';
+    refreshInterval.min = 1;
+    refreshInterval.max = 168;
+    refreshInterval.value = sourceConfig.source_refresh_interval_hours ?? 24;
+    const refreshLimit = el('input');
+    refreshLimit.type = 'number';
+    refreshLimit.min = 0;
+    refreshLimit.max = 50;
+    refreshLimit.value = sourceConfig.source_refresh_daily_limit ?? 5;
+    controlLabel('检查间隔（小时）', refreshInterval, refreshSettings);
+    controlLabel('每日网络检查上限', refreshLimit, refreshSettings, '手动刷新与自动检查共同计数。');
+    refreshSettings.append(
+        refreshToggle,
+        button('保存来源检查计划', async () => {
+            await api('config', 'PUT', {
+                revision: sourceConfig.revision,
+                daily_minutes: sourceConfig.daily_minutes ?? 45,
+                pet_enabled: sourceConfig.pet_enabled ?? false,
+                mac_execute: sourceConfig.mac_execute ?? false,
+                mac_allowed_apps: sourceConfig.mac_allowed_apps || [],
+                mac_allowed_paths: sourceConfig.mac_allowed_paths || [],
+                autonomous_paid: sourceConfig.autonomous_paid ?? false,
+                autonomy_enabled: sourceConfig.autonomy_enabled ?? false,
+                autonomy_daily_minutes: sourceConfig.autonomy_daily_minutes ?? 30,
+                autonomy_daily_items: sourceConfig.autonomy_daily_items ?? 10,
+                source_refresh_enabled: refreshEnabled.checked,
+                source_refresh_interval_hours: Number(refreshInterval.value),
+                source_refresh_daily_limit: Number(refreshLimit.value),
+            });
+            await ui.refresh();
+        })
+    );
     const sources = panel('来源复核');
     sources.append(el('p', '来源标签是你的复核判断，不是自动事实认证。争议、拒绝或过期来源不参与有效检索。', 'muted'));
     for (const r of await api('learning/sources')) {
         const box = el('article', undefined, 'memory-row');
         box.append(el('h3', r.title), el('p', '来源 ID：' + r.id), el('p', r.url || '所有者投喂'), el('p', r.source_eligible ? '当前可用于学习与检索' : '当前不可用于学习与检索', r.source_eligible ? 'muted' : 'route-note'));
+        if (r.refresh_schedule?.next_check_at) {
+            box.append(el(
+                'small',
+                '下次自动检查：' + new Date(r.refresh_schedule.next_check_at).toLocaleString(),
+                'muted'
+            ));
+        }
         const select = el('select');
         select.setAttribute('aria-label', '来源标签 ' + r.title);
         for (const [v, t] of Object.entries({

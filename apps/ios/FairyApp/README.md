@@ -15,10 +15,26 @@ This package is the native implementation starting point shared by macOS and iOS
 
 ## Build
 
+Swift Package:
+
 ```sh
 swift build
 swift build --triple arm64-apple-ios17.0-simulator --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)"
 ```
+
+Multiplatform Xcode App target:
+
+```sh
+xcodebuild -project FairyApp.xcodeproj -scheme FairyApp \
+  -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
+
+xcodebuild -project FairyApp.xcodeproj -scheme FairyApp \
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+```
+
+The Xcode target uses `Config/Fairy-Info.plist`, an empty iOS entitlements file,
+and an App Sandbox entitlement with outbound network access for macOS. It
+builds un-signed for simulator and local verification.
 
 The default local API address is `http://127.0.0.1:8010`. Opening a physical
 iPhone requires a trusted HTTPS address. Fairy defaults to loopback-only Host
@@ -27,7 +43,7 @@ README.
 
 ## Not yet included
 
-There is no signed Xcode app target, App Store archive, APNs entitlement,
+There is no selected Apple Developer Team, signed archive, APNs entitlement,
 microphone speech-recognition entitlement, Live2D/VRM host or real-device test
-suite. Local notification permission and TTS require execution on the signed
-device app. Package compilation does not imply App Store or TCC acceptance.
+suite. Local notification permission and TTS require execution on a signed
+device app. Un-signed Xcode builds do not imply App Store or TCC acceptance.

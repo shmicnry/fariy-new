@@ -2,11 +2,13 @@
 
 最新设计规范：[Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)，对应本地 Skill：`$fairy-ui-design`。
 
-最新阶段：[网页来源版本刷新](docs/implementation/网页来源版本刷新.md)。网页内容变化会创建新来源与课程，失效旧来源及派生记忆；未变化和失败都有独立审计状态。
+最新阶段：[来源周期检查与 Xcode App 骨架](docs/implementation/来源周期检查与Xcode-App骨架.md)。网页来源支持计划检查、每日网络上限和失败退避；SwiftUI Package 已补齐可构建的 macOS/iOS App target、Info.plist 与 entitlements。
+
+上一阶段：[网页来源版本刷新](docs/implementation/网页来源版本刷新.md)。网页内容变化会创建新来源与课程，失效旧来源及派生记忆；未变化和失败都有独立审计状态。
 
 上一阶段：[自主执行账本与表单保稿](docs/implementation/自主执行账本与表单保稿.md)。自主目标现支持启动、暂停、继续、完成结算、取消释放和无上限时间自动停机；Web 与 SwiftUI 已同步。
 
-最新全量审计：[P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)。修复技能调用状态未持久化、自主页覆盖 Mac 授权、原生请求超时、PWA 离线回退、配置边界、Compose 端口和 CI PostgreSQL 缺口；加入执行账本与来源刷新后 PostgreSQL 全量回归 **133 passed**。
+最新全量审计：[P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)。修复技能调用状态未持久化、自主页覆盖 Mac 授权、原生请求超时、PWA 离线回退、配置边界、Compose 端口和 CI PostgreSQL 缺口；加入执行账本、来源刷新与周期检查后 PostgreSQL 全量回归 **135 passed**。
 
 最新审计：[P2缺漏审计与修复](docs/implementation/P2审计修复.md)。修复文件幂等、学习结论撤销、精确最终依据、来源失效、测验取消和撤回入口等问题；最终在隔离 Postgres 16 上 **108 项回归全部通过**。
 
@@ -23,7 +25,7 @@ Fairy 0.3 实现 **Ollama 本地主模型 + 可配置云副模型 + 可审阅记
 - 每轮可选择自动路由、仅本机、先本机再请副模型协助。云端默认只收到当前问题；额外发送本轮检索到的已确认记忆需要明确选择。
 - 对话生成有逐字出处的记忆提案；确认后才参与长期召回。支持拒绝、查看来源、纠正、版本记录及遗忘。记忆保留逐字原文，同时标明主体和第三人称事实；明确的饮品偏好问句只依据对应主体的已确认记录回答。
 - 纠正会屏蔽相关旧对话来源；来源变化或取消后，旧模型结果不能提交，也不能继续发往云端。
-- 投喂 TXT/Markdown/PDF/DOCX，按页或段落保留出处，支持练习、固定题测验和来源复核；网页来源可显式检查版本，变化时创建新版本并失效旧派生内容。
+- 投喂 TXT/Markdown/PDF/DOCX，按页或段落保留出处，支持练习、固定题测验和来源复核；网页来源可显式或按期检查版本，支持每日网络上限和失败退避。
 - 技能安装、限时授权、启用和停用分离；Mac 桥可读取状态、应用和允许目录，并可在四层条件满足时启动允许列表中的应用。
 - 管理界面接收 SSE 事件并更新相关页面；小表单有未提交内容时会保留草稿并显示刷新提示。
 - 通知中心保存后台更新、审批和提醒；浏览器授权后可在页面后台显示系统通知。
@@ -134,7 +136,7 @@ python scripts/export_contract.py
 python scripts/acceptance_ollama.py
 ```
 
-P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境测试跳过；加入常驻服务、同步、语音、OCR、语义检索、原生操作、P3–P5 缺漏修复、自主执行账本与来源版本刷新后，在隔离 Postgres 16 上 **133 项全部通过**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
+P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境测试跳过；加入常驻服务、同步、语音、OCR、语义检索、原生操作、P3–P5 缺漏修复、自主执行账本、来源版本刷新与周期检查后，在隔离 Postgres 16 上 **135 项全部通过**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
 
 - [P1 实施与验证记录](docs/implementation/P1-模型与记忆闭环.md)
 - [Ollama 实测结果](docs/implementation/p1-ollama-acceptance.json)
@@ -144,6 +146,7 @@ P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境�
 - [P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)
 - [自主执行账本与表单保稿](docs/implementation/自主执行账本与表单保稿.md)
 - [网页来源版本刷新](docs/implementation/网页来源版本刷新.md)
+- [来源周期检查与 Xcode App 骨架](docs/implementation/来源周期检查与Xcode-App骨架.md)
 - [P3–P5 浏览器结果](docs/implementation/p3-p5-browser-results.json)
 - [UI 控件审查与优化](docs/implementation/UI控件审查与优化.md)
 - [Fairy UI 设计语言与交互规范 v1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)
@@ -161,7 +164,7 @@ P1 基线 **62 项回归通过**；P2 最新为87项通过、1项Postgres环境�
 
 云端请求预留在调用日志中，每个回合的每个阶段只派发一次。失败和超时也计入每日次数，超时费用为未知，不自动重试。重启时过期请求标记为结果未知；未过期的 pending 可以在对话或识海页中断。每日次数上限不是金额硬上限。
 
-从 `apps/ios/FairyApp` 可运行 `swift build`（macOS）和 iOS Simulator SDK 构建。原生工程仍是 Swift Package 页面与 API 骨架，尚缺签名、App Store target、真机推送和媒体验收。
+从 `apps/ios/FairyApp` 可运行 `swift build`，也可直接构建 `FairyApp.xcodeproj` 的 macOS/iOS Simulator App target；工程已包含显式 Info.plist、iOS entitlements 与 macOS App Sandbox 网络权限。尚缺开发者团队签名、APNs、真机推送和媒体验收。
 
 GitHub Actions 已配置。前次云端 runner 受账号账单/支出限制，未能启动；本机验证独立完成。`compose.yaml` 是已有 Postgres/API/worker 模板，本轮未运行容器验收；Postgres在P1收尾时已通过独立实例回归。Ollama 回环连接目前按宿主进程部署，容器不能把其自身的 `127.0.0.1` 当作宿主 Mac。
 

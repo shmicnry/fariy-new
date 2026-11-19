@@ -92,6 +92,9 @@ export async function renderAutonomy(ui) {
                 autonomy_enabled: enabled.checked,
                 autonomy_daily_minutes: Number(minutes.value),
                 autonomy_daily_items: Number(items.value),
+                source_refresh_enabled: Boolean(config.source_refresh_enabled),
+                source_refresh_interval_hours: config.source_refresh_interval_hours ?? 24,
+                source_refresh_daily_limit: config.source_refresh_daily_limit ?? 5,
             });
             await ui.refresh();
         }),

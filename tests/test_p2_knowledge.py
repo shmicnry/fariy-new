@@ -1,12 +1,14 @@
 import json
 import socket
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from fairy.app import create_app
 from fairy.knowledge import KnowledgeService
 from fairy.link_fetch import validate_url, public_addresses, fetch_text, ArticleParser
-from fairy.worker import tick
+from fairy.autonomy import AutonomyService
+from fairy.worker import tick, refresh_due_source
 
 
 @pytest.fixture
@@ -39,6 +41,8 @@ def test_link_import_is_reserved_and_not_refetched(env):
         and material["quality"]["rating"] == "unreviewed"
     )
     assert svc.list("course")[0]["practice_required"]
+    listed = c.get("/v2/learning/sources").json()
+    assert listed[0]["refresh_schedule"]["source_id"] == material["id"]
 
 
 @pytest.mark.parametrize(
@@ -235,6 +239,110 @@ def test_web_source_refresh_failure_keeps_current_source(env):
     assert result["status"] == "failed"
     current = c.get("/v2/learning/sources").json()
     assert len(current) == 1 and current[0]["id"] == source["id"]
+
+
+def make_schedule_due(app, source_id):
+    schedule = next(
+        item
+        for item in app.state.service.list("source_refresh_schedule")
+        if item["source_id"] == source_id
+    )
+    with app.state.db.tx() as session:
+        row = app.state.service.get(session, schedule["id"], "source_refresh_schedule")
+        payload = json.loads(row.payload)
+        payload["next_check_at"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=1)
+        ).isoformat()
+        row.payload = json.dumps(payload)
+    return schedule
+
+
+def test_scheduled_source_refresh_backs_off_after_failure(env):
+    app, c, svc = env
+    imported = svc.link(
+        "https://example.com/scheduled",
+        "周期来源",
+        "scheduled-link",
+        lambda _: "初始正文。",
+    )
+    source = next(
+        item for item in svc.list("material") if item["id"] == imported["material_id"]
+    )
+    app.state.service.configure(
+        0,
+        {
+            "source_refresh_enabled": True,
+            "source_refresh_interval_hours": 1,
+            "source_refresh_daily_limit": 3,
+        },
+    )
+    make_schedule_due(app, source["id"])
+    changed = refresh_due_source(
+        app.state.db,
+        AutonomyService(app.state.db),
+        lambda _: "更新后的正文。",
+    )
+    assert changed["status"] == "changed"
+    new_source = next(
+        item for item in svc.list("material") if item["id"] == changed["new_source_id"]
+    )
+    make_schedule_due(app, new_source["id"])
+
+    def unavailable(_):
+        raise ValueError("network unavailable")
+
+    failed = refresh_due_source(
+        app.state.db,
+        AutonomyService(app.state.db),
+        unavailable,
+    )
+    assert failed["status"] == "failed"
+    schedule = next(
+        item
+        for item in svc.list("source_refresh_schedule")
+        if item["source_id"] == new_source["id"]
+    )
+    assert schedule["consecutive_failures"] == 1
+    assert datetime.fromisoformat(schedule["next_check_at"]) > datetime.now(
+        timezone.utc
+    )
+    assert refresh_due_source(
+        app.state.db,
+        AutonomyService(app.state.db),
+        lambda _: pytest.fail("backoff must prevent an immediate retry"),
+    ) is None
+
+
+def test_scheduled_source_refresh_respects_daily_network_budget(env):
+    app, c, svc = env
+    for index in range(2):
+        svc.link(
+            f"https://example.com/budget-{index}",
+            f"预算来源 {index}",
+            f"budget-{index}",
+            lambda _, index=index: f"正文 {index}",
+        )
+    app.state.service.configure(
+        0,
+        {
+            "source_refresh_enabled": True,
+            "source_refresh_interval_hours": 1,
+            "source_refresh_daily_limit": 1,
+        },
+    )
+    for source in svc.list("material"):
+        make_schedule_due(app, source["id"])
+    first = refresh_due_source(
+        app.state.db,
+        AutonomyService(app.state.db),
+        lambda url: "正文 " + url.rsplit("-", 1)[-1],
+    )
+    assert first["status"] == "unchanged"
+    assert refresh_due_source(
+        app.state.db,
+        AutonomyService(app.state.db),
+        lambda _: pytest.fail("daily limit must stop the next check"),
+    ) is None
 
 
 def test_fetch_rejects_redirect_and_enforces_pin():

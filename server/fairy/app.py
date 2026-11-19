@@ -130,6 +130,9 @@ class Config(Strict):
     autonomy_enabled: bool = False
     autonomy_daily_minutes: int = Field(default=30, ge=0, le=240)
     autonomy_daily_items: int = Field(default=10, ge=0, le=100)
+    source_refresh_enabled: bool = False
+    source_refresh_interval_hours: int = Field(default=24, ge=1, le=168)
+    source_refresh_daily_limit: int = Field(default=5, ge=0, le=50)
 
     @field_validator("mac_allowed_apps")
     @classmethod
@@ -305,6 +308,7 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             ],
             "source_review": True,
             "source_version_refresh": True,
+            "scheduled_source_refresh": True,
             "world_claims": True,
             "fixed_choice_assessments": True,
             "skills_registry": True,
@@ -448,10 +452,16 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     @api.get("/learning/sources")
     def sources():
         with db.sessions() as s:
+            schedules = {
+                json.loads(row.payload).get("source_id"): view(row)
+                for row in service.rows(s, "source_refresh_schedule")
+                if row.status == "active"
+            }
             results = []
             for row in service.list("material"):
                 source = service.get(s, row["id"], "material")
                 row["source_eligible"] = service.source_eligible(source)
+                row["refresh_schedule"] = schedules.get(row["id"])
                 results.append(row)
             return results
 

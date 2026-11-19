@@ -6,11 +6,14 @@ import os
 import signal
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .store import Store, now
 from .service import Service
 from .autonomy import AutonomyService
+from .knowledge import KnowledgeService
+from .link_fetch import fetch_text
 
 
 def status_path(state_dir):
@@ -103,6 +106,128 @@ class WorkerLock:
                 self.path.unlink(missing_ok=True)
 
 
+def refresh_due_source(db, autonomy, collector=fetch_text):
+    service = KnowledgeService(db)
+    current = datetime.now(timezone.utc)
+    with db.sessions() as session:
+        config = autonomy._config(session)
+        if not config.get("source_refresh_enabled", False):
+            return None
+        daily_limit = int(config.get("source_refresh_daily_limit", 5))
+        attempts = sum(
+            autonomy._is_today(row.created_at)
+            for row in service.rows(session, "source_refresh")
+        )
+        if daily_limit <= 0 or attempts >= daily_limit:
+            return None
+        sources = {
+            row.id: row
+            for row in service.rows(session, "material")
+            if row.status == "active"
+            and json.loads(row.payload).get("source_type") == "web_link"
+        }
+        schedules = {
+            json.loads(row.payload).get("source_id"): row
+            for row in service.rows(session, "source_refresh_schedule")
+            if row.status == "active"
+        }
+        due = None
+        for source_id, source in sources.items():
+            schedule = schedules.get(source_id)
+            try:
+                next_check = (
+                    autonomy._timestamp(json.loads(schedule.payload)["next_check_at"])
+                    if schedule
+                    else current
+                )
+            except (TypeError, ValueError):
+                next_check = current
+            if next_check <= current and (due is None or schedule is None):
+                due = (source, schedule)
+        if due is None:
+            return None
+        source, schedule = due
+
+    if schedule is None:
+        with db.tx() as session:
+            schedule = db.add(
+                session,
+                "owner",
+                "source_refresh_schedule",
+                {
+                    "source_id": source.id,
+                    "next_check_at": current.isoformat(),
+                    "consecutive_failures": 0,
+                    "last_status": "due",
+                },
+            )
+
+    interval = int(config.get("source_refresh_interval_hours", 24))
+    source_data = json.loads(source.payload)
+    result = service.refresh_source(
+        source.id,
+        source.revision,
+        f"auto-source-{source.id}-{source.revision}-{schedule.revision}",
+        collector,
+    )
+    with db.tx() as session:
+        schedule = service.get(session, schedule.id, "source_refresh_schedule")
+        payload = json.loads(schedule.payload)
+        payload.update(
+            last_checked_at=current.isoformat(),
+            last_status=result["status"],
+            last_source_revision=source.revision,
+            last_source_url=source_data["url"],
+        )
+        if result["status"] == "failed":
+            failures = int(payload.get("consecutive_failures", 0)) + 1
+            delay_hours = min(interval * (2**min(failures, 6)), 168)
+            payload.update(
+                consecutive_failures=failures,
+                next_check_at=(current + timedelta(hours=delay_hours)).isoformat(),
+                last_error=result.get("error"),
+            )
+        elif result["status"] == "changed":
+            payload.update(
+                consecutive_failures=0,
+                next_check_at=None,
+                replacement_source_id=result["new_source_id"],
+            )
+            if schedule.status != "invalidated":
+                schedule.status = "invalidated"
+                db.add(
+                    session,
+                    "owner",
+                    "source_refresh_schedule",
+                    {
+                        "source_id": result["new_source_id"],
+                        "next_check_at": (
+                            current + timedelta(hours=interval)
+                        ).isoformat(),
+                        "consecutive_failures": 0,
+                        "last_status": "version_created",
+                    },
+                )
+        else:
+            payload.update(
+                consecutive_failures=0,
+                next_check_at=(current + timedelta(hours=interval)).isoformat(),
+            )
+        schedule.revision += 1
+        schedule.payload = json.dumps(payload)
+        db.emit(
+            session,
+            "owner",
+            "learning.source_auto_checked",
+            {
+                "source_id": source.id,
+                "status": result["status"],
+                "schedule_id": schedule.id,
+            },
+        )
+    return result
+
+
 def tick(db):
     service = Service(db)
     with db.tx() as s:
@@ -183,18 +308,23 @@ def run_cycle(db, autonomy, state_dir, started_at, cycle):
     error = None
     try:
         tick_ok = tick(db)
+        source_result = refresh_due_source(db, autonomy)
         stopped = autonomy.enforce_budget()
         created = autonomy.refresh()
         summary = {
             "tick_processed": tick_ok,
             "autonomy_candidates_created": len(created),
             "autonomy_goals_stopped": len(stopped),
+            "source_refresh_status": (
+                source_result["status"] if source_result is not None else None
+            ),
         }
     except Exception as exc:
         summary = {
             "tick_processed": False,
             "autonomy_candidates_created": 0,
             "autonomy_goals_stopped": 0,
+            "source_refresh_status": None,
         }
         error = type(exc).__name__
     write_status(

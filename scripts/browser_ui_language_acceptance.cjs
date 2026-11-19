@@ -62,6 +62,11 @@ async function request(path, method = 'GET', body) {
     assert.match(await compactHeading.innerText(), /…\.md$/);
 
     await page.locator('#nav a[href="#world"]').click();
+    await page.getByLabel('启用自动网页来源检查').check();
+    await page.getByLabel('检查间隔（小时）').fill('12');
+    await page.getByLabel('每日网络检查上限').fill('4');
+    await page.getByRole('button', {name: '保存来源检查计划', exact: true}).click();
+    await page.locator('.toast').filter({hasText: '保存来源检查计划已完成'}).waitFor();
     const sourceCard = page.locator('article').filter({hasText: longName});
     await sourceCard.getByRole('button', {name: '删除这份来源', exact: true}).click();
     const confirm = page.locator('#detailDialog');
@@ -144,6 +149,9 @@ async function request(path, method = 'GET', body) {
         autonomy_enabled: currentConfig.autonomy_enabled ?? false,
         autonomy_daily_minutes: currentConfig.autonomy_daily_minutes ?? 30,
         autonomy_daily_items: currentConfig.autonomy_daily_items ?? 10,
+        source_refresh_enabled: currentConfig.source_refresh_enabled ?? false,
+        source_refresh_interval_hours: currentConfig.source_refresh_interval_hours ?? 24,
+        source_refresh_daily_limit: currentConfig.source_refresh_daily_limit ?? 5,
     });
     await page.locator('#nav a[href="#evolution"]').click();
     await page.getByRole('button', {name: '保存自主预算', exact: true}).click();
@@ -151,6 +159,9 @@ async function request(path, method = 'GET', body) {
     const updatedConfig = (await request('config'))[0];
     assert.equal(updatedConfig.mac_execute, true);
     assert.deepEqual(updatedConfig.mac_allowed_apps, ['TextEdit']);
+    assert.equal(updatedConfig.source_refresh_enabled, true);
+    assert.equal(updatedConfig.source_refresh_interval_hours, 12);
+    assert.equal(updatedConfig.source_refresh_daily_limit, 4);
 
     const experimentDraft = 'background-event-draft-' + crypto.randomUUID();
     const experimentField = page.getByLabel('实验用例与候选输出（JSON）');
@@ -190,6 +201,7 @@ async function request(path, method = 'GET', body) {
                 'jump-to-latest behavior',
                 'IME composition does not submit',
                 'autonomy settings preserve Mac execution scope',
+                'source refresh settings survive unrelated saves',
                 'draft survives background event refresh',
                 'iPhone layout has no horizontal overflow',
                 'no browser runtime errors',
