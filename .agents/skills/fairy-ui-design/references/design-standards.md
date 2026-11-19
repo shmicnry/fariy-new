@@ -1,6 +1,6 @@
 # Fairy UI Design Language and Interaction Standard
 
-Version 1.0. This is the normative design reference for Fairy web, PWA, macOS,
+Version 1.1. This is the normative design reference for Fairy web, PWA, macOS,
 and iPhone interfaces.
 
 ## 1. Product direction
@@ -81,6 +81,12 @@ or neon shadows.
 - Dialog: 16 px radius; drawer: 18 px.
 - Nested radius: `inner = outer - gap`, minimum 4 px.
 - Avoid a bordered card inside a bordered panel. Use separators and surface steps.
+- Use continuous-curvature corners for rounded cards, dialogs, sheets and
+  Apple-native controls. On web, treat `corner-shape: squircle` as progressive
+  enhancement and keep `border-radius` as fallback. In SwiftUI, use
+  `RoundedCornerStyle.continuous`.
+- Keep one corner treatment within a hierarchy. Circles and capsules stay true
+  circles or capsules; do not apply squircle smoothing to every shape.
 
 ### Materials
 
@@ -145,6 +151,21 @@ Rules:
 - Animate a number from its previous value to the current value once, with Ease
   Out, unless reduced motion is enabled.
 
+### Sidebar navigation
+
+- Structure the macOS sidebar in three regions: fixed identity/context at the
+  top, scrollable grouped destinations in the middle, and fixed low-frequency
+  tools at the bottom.
+- Preserve access to all useful destinations before hiding capability. Group
+  related entries, add short group labels, and separate groups by spacing
+  rather than nested borders.
+- Use one selected-row surface plus one accent marker. Keep non-selected labels
+  in secondary ink; reserve full-strength text for selection and current state.
+- When the middle list overflows, only that region scrolls. Top identity and
+  bottom settings/help/version remain stable.
+- On iPhone, convert persistent sidebar navigation into the platform's tab,
+  sheet or push-navigation structure; do not reproduce the desktop sidebar.
+
 ### Skill lifecycle
 
 Show `安装 → 授权 → 启用 → 执行` as a stepper. The button changes with state;
@@ -162,6 +183,35 @@ permission scope, expiry, and revocation remain visible as data.
 - Empty state includes the direct next action.
 - Error state names what happened and how to recover.
 - Unavailable functions remain visibly unavailable with the actual blocker.
+
+### Loading and progress
+
+- Skeleton when the final layout is known and data is unresolved. Mirror the
+  final block geometry, not invented content, and delay it briefly to avoid a
+  flash on fast responses.
+- Determinate progress when work has a measurable stage or completion. Follow
+  real progress, cap uncertainty below completion, and switch to elapsed time,
+  stage, cancel and retry when duration becomes unknown.
+- Blur-up when media has an aspect-ratio-reserved placeholder. Animate from the
+  local placeholder to the loaded image; cached media appears immediately.
+- Use a compact spinner only for a short action whose structure is unknown.
+  Long unknown work becomes an explicit, interruptible task state.
+
+### Contained disclosure
+
+- A collapsed control may summarize people, count, progress, selected tool or a
+  short status, but it must retain enough context to explain what will expand.
+- Choose a compact control that fits the object:
+  - avatar stack or “+N” for participants;
+  - surface fill for real bounded progress;
+  - one-item-at-a-time horizontal accordion for mutually exclusive detail;
+  - anchored tray for actions tied to a stable parent;
+  - pull/click summary for dense counts or folded panels;
+  - finger-sized scrub strip only on touch devices and only with a non-gesture
+    alternative.
+- Expanded state uses `aria-expanded`, a visible state change, focus return and
+  Escape or a labelled close action. Touch handles are at least 44 pt.
+- Never make hover, drag or swipe the sole way to reveal required information.
 
 ## 6. Chat and AI interaction
 
@@ -190,6 +240,11 @@ permission scope, expiry, and revocation remain visible as data.
   - width persists per user.
 - Panes must never be resized so far that content becomes unreadable.
 - Drawers open from the trailing edge; dialogs stay compact.
+- The sidebar's top identity and bottom utility regions remain fixed while only
+  the middle destination list scrolls. Do not create a second scrollbar inside a
+  navigation group.
+- Secondary or low-frequency destinations move to the fixed bottom region
+  instead of being deleted merely to make the list look shorter.
 
 ## 8. iPhone behavior
 
@@ -214,12 +269,23 @@ Use motion to explain a change, not to decorate a static interface.
 | One page reveal | Initial route content, once |
 | Toast rise/fade | Background completion |
 | Number tween | Budget/score changes |
-| Progress fill | Real bounded task |
-| Skeleton shimmer | Only while data is unresolved |
+| Progress fill | Real bounded task; never fake completion |
+| Skeleton shimmer | Only while geometry is known and data is unresolved |
+| Blur-up | Aspect-ratio-reserved media after local placeholder |
 | Row stagger | One short list entrance, max ~40 ms stagger |
 | Typewriter | Real streaming model output only |
+| Matched bounds | Moving selection or detail that keeps object identity |
+| Layout reorder | Reordering a real list after user action |
+| Path draw | Trace rail or provenance path with meaningful endpoints |
+| Mask reveal | Introducing one layer whose relationship is preserved |
+| Tap ripple | Direct manipulation feedback, clipped to its target |
 | Spotlight / magnetic / 3D tilt / border beam / text scramble | Not used in core workflows |
 | Parallax / marquee / looping glow | Not used in Fairy |
+
+Begin implementation with the effect's functional name, not an adjective such
+as “高级” or “生动”. Read
+[interaction-patterns.md](interaction-patterns.md) for the approved vocabulary,
+parameters and rejected uses.
 
 One easing family and a small duration set:
 
@@ -231,6 +297,12 @@ One easing family and a small duration set:
 Animate opacity, transform, color, background and border. Do not animate width,
 height, margins, top/left, or large blur filters. Always respect
 `prefers-reduced-motion`.
+
+- Do not let a small waiting indicator replace diagnostic progress. A status
+  that may take longer than a glance must expose stage, elapsed state, cancel
+  and recovery.
+- Motion is acknowledged by real completion. Do not pulse after the underlying
+  event is read, resolved, hidden or inactive.
 
 ## 10. Hidden AI-interface details
 
@@ -267,6 +339,16 @@ map where the metaphor is functional.
 - Are dirty forms protected from accidental dismissal?
 - Are destructive confirmations action-specific?
 - Is every nested hierarchy single-bordered and radius-consistent?
+- Does the macOS sidebar keep identity and low-frequency tools fixed while only
+  the grouped middle region scrolls?
+- Does the selected destination remain unmistakable without relying on color
+  alone?
+- Does each wait state match known geometry, measurable progress or media
+  placeholder behavior?
+- Does every collapsed control remain understandable and reversible, with
+  keyboard and touch alternatives?
+- Are Apple-native and supported web corners continuous while unsupported
+  browsers retain a clean `border-radius` fallback?
 - Does the layout preserve information density on macOS and touch clarity on iPhone?
 - Are keyboard, IME, scroll-follow, long-text and resize cases handled?
 - Is there one primary action and one memorable product moment per page?
