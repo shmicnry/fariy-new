@@ -24,6 +24,7 @@ from .skills import SkillGrantInput, SkillInvokeInput, SkillService
 from .autonomy import AutonomyService
 from .evolution import EvolutionService, ExperimentInput
 from .worker import read_status
+from .maintenance import health_status as backup_health_status
 from .voice import SpeechInput, TranscriptionInput, VoiceService
 from .semantic import SemanticService
 from fastapi.exceptions import RequestValidationError
@@ -133,6 +134,7 @@ class Config(Strict):
     source_refresh_enabled: bool = False
     source_refresh_interval_hours: int = Field(default=24, ge=1, le=168)
     source_refresh_daily_limit: int = Field(default=5, ge=0, le=50)
+    source_allowed_hosts: list[str] = Field(default_factory=list, max_length=50)
 
     @field_validator("mac_allowed_apps")
     @classmethod
@@ -165,6 +167,31 @@ class Config(Strict):
                 raise ValueError("allowed_paths_must_be_absolute")
             if item not in cleaned:
                 cleaned.append(item)
+        return cleaned
+
+    @field_validator("source_allowed_hosts")
+    @classmethod
+    def valid_source_hosts(cls, value):
+        cleaned = []
+        for item in value:
+            item = item.strip().casefold()
+            wildcard = item.startswith("*.")
+            host = item[2:] if wildcard else item
+            if (
+                not host
+                or len(host) > 253
+                or any(
+                    character not in "abcdefghijklmnopqrstuvwxyz0123456789.-"
+                    for character in host
+                )
+                or host.startswith(".")
+                or host.endswith(".")
+                or ".." in host
+            ):
+                raise ValueError("invalid_source_allowed_host")
+            normalized = ("*." if wildcard else "") + host
+            if normalized not in cleaned:
+                cleaned.append(normalized)
         return cleaned
 
 
@@ -214,6 +241,10 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     app.state.voice = voice
     app.state.semantic = semantic
     app.state.worker_state_dir = os.getenv("FAIRY_STATE_DIR", "var")
+    state_dir = Path(app.state.worker_state_dir).absolute()
+    app.state.backup_dir = os.getenv(
+        "FAIRY_BACKUP_DIR", str(state_dir.parent / "backups")
+    )
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -779,6 +810,10 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "status": "missing",
             "alive": False,
         }
+
+    @api.get("/maintenance/backup/status")
+    def backup_status():
+        return backup_health_status(app.state.backup_dir)
 
     @api.get("/voice/status")
     def voice_status():

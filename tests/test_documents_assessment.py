@@ -5,10 +5,10 @@ import zipfile
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from pypdf import PdfWriter
+from pypdf import PdfReader, PdfWriter
 from pypdf.generic import DictionaryObject, NameObject, DecodedStreamObject
 from fairy.app import create_app
-from fairy.document_extract import extract
+from fairy.document_extract import extract, extract_pdf
 from fairy.worker import tick
 from tests.db import postgres_url
 
@@ -68,6 +68,25 @@ def test_blank_pdf_requires_ocr_and_entities_rejected():
         extract(data.getvalue(), ".pdf")
     with pytest.raises(ValueError, match="entities"):
         extract(docx_bytes('<!DOCTYPE x [<!ENTITY a "boom">]><x/>'), ".docx")
+
+
+def test_mixed_pdf_uses_ocr_only_for_blank_page(monkeypatch):
+    source = PdfReader(io.BytesIO(pdf_bytes("Text layer")))
+    writer = PdfWriter()
+    writer.add_page(source.pages[0])
+    writer.add_blank_page(width=300, height=300)
+    output = io.BytesIO()
+    writer.write(output)
+    monkeypatch.setattr(
+        "fairy.document_extract.ocr_pdf_pages",
+        lambda _: {2: "Scanned page text."},
+    )
+    result = extract_pdf(output.getvalue())
+    assert "Text layer" in result["text"]
+    assert "Scanned page text." in result["text"]
+    assert result["method"] == "text_and_pdf_ocr"
+    assert result["pdf_ocr_pages"] == [2]
+    assert result["ocr"] is True
 
 
 def test_docx_zip_expansion_refused():

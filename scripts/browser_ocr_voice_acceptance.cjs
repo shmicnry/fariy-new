@@ -2,6 +2,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const {spawnSync} = require('node:child_process');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const base = process.env.FAIRY_TEST_URL || 'http://127.0.0.1:18860';
@@ -44,6 +45,35 @@ const token = process.env.FAIRY_TOKEN;
     assert.equal(source.extraction.method, 'macos_vision_ocr');
     assert.match(source.text, /Fairy/i);
 
+    const scannedPdf = path.join(
+        fs.mkdtempSync(path.join(os.tmpdir(), 'fairy-pdf-acceptance-')),
+        'scanned-learning.pdf'
+    );
+    const conversion = spawnSync('sips', [
+        '-s', 'format', 'pdf', image, '--out', scannedPdf,
+    ], {encoding: 'utf8'});
+    assert.equal(conversion.status, 0, conversion.stderr);
+    await page.getByLabel('选择文字文件').setInputFiles(scannedPdf);
+    await page.getByRole('button', {name: '上传并学习', exact: true}).click();
+    await page.getByRole('heading', {name: 'scanned-learning.pdf', exact: true}).waitFor();
+    const pdfWorker = spawnSync('.venv/bin/python', ['-m', 'fairy.worker', '--once'], {
+        env: process.env,
+        encoding: 'utf8',
+    });
+    assert.equal(pdfWorker.status, 0, pdfWorker.stderr);
+    const pdfSourcesResponse = await fetch(base + '/v2/learning/sources', {
+        headers: {Authorization: 'Bearer ' + token},
+    });
+    assert.equal(pdfSourcesResponse.ok, true);
+    const pdfSource = (await pdfSourcesResponse.json()).find(
+        item => item.title === 'scanned-learning.pdf'
+    );
+    assert.ok(pdfSource);
+    assert.equal(pdfSource.file_format, '.pdf');
+    assert.equal(pdfSource.extraction.ocr, true);
+    assert.equal(pdfSource.extraction.pdf_ocr_pages[0], 1);
+    assert.match(pdfSource.text, /Fairy/i);
+
     const statusResponse = await fetch(base + '/v2/voice/status', {
         headers: {Authorization: 'Bearer ' + token},
     });
@@ -73,6 +103,7 @@ const token = process.env.FAIRY_TOKEN;
             status: 'passed',
             checks: [
                 'macOS Vision OCR image upload',
+                'macOS Vision scanned PDF page OCR',
                 'bounded OCR line extraction',
                 'worker processing of OCR source',
                 'local TTS status',

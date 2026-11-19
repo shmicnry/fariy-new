@@ -6,11 +6,7 @@ __pycache__/
 .env.*
 !.env.example
 var/
-*.db
-*.sqlite*
 .DS_Store
 build/
 **/.build/
 *.egg-info/
-
-*.migrate.lock

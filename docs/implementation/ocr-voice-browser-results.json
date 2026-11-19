@@ -2,6 +2,7 @@
   "status": "passed",
   "checks": [
     "macOS Vision OCR image upload",
+    "macOS Vision scanned PDF page OCR",
     "bounded OCR line extraction",
     "worker processing of OCR source",
     "local TTS status",

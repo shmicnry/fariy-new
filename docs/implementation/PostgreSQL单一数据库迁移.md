@@ -73,7 +73,7 @@ Xcode/SwiftPM 的 `.build/.../build.db` 是编译系统内部缓存，不属于 
 - API：`storage = postgresql`；
 - worker：心跳正常，`source_refresh_status = null`；
 - PostgreSQL 自定义备份：通过 `pg_restore --list`；
-- 全量测试：**135 passed，0 skipped**；
+- 全量测试：**137 passed，0 skipped**；
 - API LaunchAgent、worker LaunchAgent 和每日 03:00 备份 LaunchAgent 均已指向 PostgreSQL。
 
 ## 运维要求

@@ -79,17 +79,37 @@ def extract_pdf(raw):
     if len(reader.pages) > 100:
         raise ValueError("pdf_page_limit")
     parts = []
+    missing_pages = []
     for i, page in enumerate(reader.pages, 1):
         content = page.get_contents()
         if content is not None and len(content.get_data()) > 8_000_000:
             raise ValueError("pdf_content_limit")
-        parts.append(("page:" + str(i), (page.extract_text() or "").strip()))
-    return join_segments(parts)
+        value = (page.extract_text() or "").strip()
+        parts.append(("page:" + str(i), value))
+        if not value:
+            missing_pages.append(i)
+    ocr_pages = {}
+    if missing_pages:
+        try:
+            ocr_pages = ocr_pdf_pages(raw)
+        except ValueError:
+            pass
+        for index in missing_pages:
+            text = ocr_pages.get(index, "").strip()
+            if text:
+                parts[index - 1] = ("page:" + str(index), text)
+    result = join_segments(parts)
+    if missing_pages:
+        result["pdf_ocr_pages"] = sorted(
+            index for index in missing_pages if ocr_pages.get(index, "").strip()
+        )
+        if result.get("pdf_ocr_pages"):
+            result["method"] = "text_and_pdf_ocr"
+            result["ocr"] = True
+    return result
 
 
-def extract_image(raw, suffix):
-    if sys.platform != "darwin":
-        raise ValueError("macos_vision_ocr_required")
+def mac_bridge_helper():
     configured = os.getenv("FAIRY_MAC_BRIDGE_EXECUTABLE", "").strip()
     helper = (
         Path(configured)
@@ -104,6 +124,45 @@ def extract_image(raw, suffix):
     )
     if not helper.is_file():
         raise ValueError("macos_vision_ocr_helper_not_built")
+    return helper
+
+
+def ocr_pdf_pages(raw):
+    if sys.platform != "darwin":
+        raise ValueError("macos_vision_pdf_ocr_required")
+    helper = mac_bridge_helper()
+    with tempfile.TemporaryDirectory(prefix="fairy-pdf-ocr-") as directory:
+        path = Path(directory) / "document.pdf"
+        path.write_bytes(raw)
+        try:
+            process = subprocess.run(
+                [str(helper), "ocr-pdf", str(path)],
+                capture_output=True,
+                text=True,
+                timeout=90,
+                check=False,
+                env={"PATH": os.defpath},
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            raise ValueError("macos_vision_pdf_ocr_failed")
+    if process.returncode != 0:
+        raise ValueError("macos_vision_pdf_ocr_failed")
+    try:
+        payload = json.loads(process.stdout)
+    except (ValueError, TypeError):
+        raise ValueError("macos_vision_pdf_ocr_failed")
+    pages = payload.get("pages", [])
+    return {
+        int(page["page"]): str(page.get("text", ""))[:256_000]
+        for page in pages
+        if isinstance(page, dict) and isinstance(page.get("page"), int)
+    }
+
+
+def extract_image(raw, suffix):
+    if sys.platform != "darwin":
+        raise ValueError("macos_vision_ocr_required")
+    helper = mac_bridge_helper()
     with tempfile.TemporaryDirectory(prefix="fairy-ocr-") as directory:
         path = Path(directory) / ("image" + suffix)
         path.write_bytes(raw)
@@ -169,7 +228,7 @@ def extract(raw, suffix):
             proc.stdin.close()
             start = time.monotonic()
             while proc.poll() is None:
-                if time.monotonic() - start > 20:
+                if time.monotonic() - start > (90 if suffix == ".pdf" else 20):
                     raise ValueError("document_parse_timeout")
                 try:
                     if psutil.Process(proc.pid).memory_info().rss > 768 * 1024 * 1024:
@@ -194,11 +253,14 @@ def extract(raw, suffix):
 def main():
     import resource
 
-    resource.setrlimit(resource.RLIMIT_CPU, (10, 10))
+    request = json.loads(sys.stdin.buffer.read(1_500_000))
+    resource.setrlimit(
+        resource.RLIMIT_CPU,
+        (60, 60) if request["suffix"] == ".pdf" else (10, 10),
+    )
     if sys.platform != "darwin":
         resource.setrlimit(resource.RLIMIT_AS, (768 * 1024 * 1024, 768 * 1024 * 1024))
     resource.setrlimit(resource.RLIMIT_FSIZE, (1024 * 1024, 1024 * 1024))
-    request = json.loads(sys.stdin.buffer.read(1_500_000))
     import base64
 
     raw = base64.b64decode(request["data"], validate=True)

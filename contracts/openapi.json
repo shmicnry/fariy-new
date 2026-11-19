@@ -2617,6 +2617,44 @@
         }
       }
     },
+    "/maintenance/backup/status": {
+      "get": {
+        "summary": "Backup Status",
+        "operationId": "backup_status_maintenance_backup_status_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/voice/status": {
       "get": {
         "summary": "Voice Status",
@@ -4320,6 +4358,14 @@
             "minimum": 0.0,
             "title": "Source Refresh Daily Limit",
             "default": 5
+          },
+          "source_allowed_hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Source Allowed Hosts"
           }
         },
         "additionalProperties": false,

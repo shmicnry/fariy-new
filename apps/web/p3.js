@@ -178,6 +178,7 @@ export async function renderMac(ui) {
             source_refresh_enabled: Boolean(config.source_refresh_enabled),
             source_refresh_interval_hours: config.source_refresh_interval_hours ?? 24,
             source_refresh_daily_limit: config.source_refresh_daily_limit ?? 5,
+            source_allowed_hosts: config.source_allowed_hosts || [],
         });
         await ui.refresh();
         })

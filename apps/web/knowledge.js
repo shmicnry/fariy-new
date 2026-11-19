@@ -46,8 +46,16 @@ export async function renderKnowledge(ui) {
     refreshLimit.min = 0;
     refreshLimit.max = 50;
     refreshLimit.value = sourceConfig.source_refresh_daily_limit ?? 5;
+    const allowedHosts = el('textarea');
+    allowedHosts.value = (sourceConfig.source_allowed_hosts || []).join('\n');
     controlLabel('检查间隔（小时）', refreshInterval, refreshSettings);
     controlLabel('每日网络检查上限', refreshLimit, refreshSettings, '手动刷新与自动检查共同计数。');
+    controlLabel(
+        '允许的网页域名',
+        allowedHosts,
+        refreshSettings,
+        '每行一个，例如 example.com 或 *.example.com；留空表示沿用公网 HTTPS 通用规则。'
+    );
     refreshSettings.append(
         refreshToggle,
         button('保存来源检查计划', async () => {
@@ -65,6 +73,10 @@ export async function renderKnowledge(ui) {
                 source_refresh_enabled: refreshEnabled.checked,
                 source_refresh_interval_hours: Number(refreshInterval.value),
                 source_refresh_daily_limit: Number(refreshLimit.value),
+                source_allowed_hosts: allowedHosts.value
+                    .split('\n')
+                    .map(value => value.trim())
+                    .filter(Boolean),
             });
             await ui.refresh();
         })
@@ -74,6 +86,13 @@ export async function renderKnowledge(ui) {
     for (const r of await api('learning/sources')) {
         const box = el('article', undefined, 'memory-row');
         box.append(el('h3', r.title), el('p', '来源 ID：' + r.id), el('p', r.url || '所有者投喂'), el('p', r.source_eligible ? '当前可用于学习与检索' : '当前不可用于学习与检索', r.source_eligible ? 'muted' : 'route-note'));
+        if (r.previous_diff) {
+            box.append(el(
+                'small',
+                `与上版相比：新增 ${r.previous_diff.added_lines} 行，移除 ${r.previous_diff.removed_lines} 行`,
+                'muted'
+            ));
+        }
         if (r.refresh_schedule?.next_check_at) {
             box.append(el(
                 'small',

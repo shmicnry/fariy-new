@@ -137,17 +137,29 @@ def test_config_allowlists_are_bounded_and_normalized(env):
         ).status_code
         == 422
     )
+    assert (
+        client.put(
+            "/v2/config",
+            json={**base, "source_allowed_hosts": ["https://example.com"]},
+        ).status_code
+        == 422
+    )
     configured = client.put(
         "/v2/config",
         json={
             **base,
             "mac_allowed_apps": [" TextEdit ", "TextEdit"],
             "mac_allowed_paths": ["/tmp", "/tmp"],
+            "source_allowed_hosts": [" Example.COM ", "example.com", "*.trusted.example"],
         },
     )
     assert configured.status_code == 200, configured.text
     assert configured.json()["mac_allowed_apps"] == ["TextEdit"]
     assert configured.json()["mac_allowed_paths"] == ["/tmp"]
+    assert configured.json()["source_allowed_hosts"] == [
+        "example.com",
+        "*.trusted.example",
+    ]
 
 
 def test_mac_open_app_requires_all_scopes_and_has_no_arbitrary_arguments(env):
@@ -704,7 +716,7 @@ def test_pwa_shell_is_served_and_does_not_cache_api(env):
     assert "url.pathname.startsWith('/v2/')" in worker.text
     assert "response.ok" in worker.text
     assert "event.request.mode === 'navigate'" in worker.text
-    assert "fairy-shell-v16" in worker.text
+    assert "fairy-shell-v17" in worker.text
 
 
 def test_local_voice_status_and_tts(env, monkeypatch):

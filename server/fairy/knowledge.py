@@ -1,14 +1,62 @@
 """Owner-reviewed source quality, grounded world claims and course evaluation."""
 
+import difflib
 import hashlib
 import json
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit
 from .learning import LearningService
 from .service import fail
 from .store import view, now
 
 
 class KnowledgeService(LearningService):
+    @staticmethod
+    def source_host_allowed(url, allowed_hosts):
+        if not allowed_hosts:
+            return True
+        host = (urlsplit(url).hostname or "").casefold()
+        for pattern in allowed_hosts:
+            pattern = pattern.casefold()
+            if pattern.startswith("*."):
+                base = pattern[2:]
+                if host == base or host.endswith("." + base):
+                    return True
+            elif host == pattern:
+                return True
+        return False
+
+    def _require_source_allowed(self, session, url):
+        configs = [
+            row for row in self.rows(session, "config") if row.status == "active"
+        ]
+        allowed = (
+            json.loads(configs[0].payload).get("source_allowed_hosts", [])
+            if configs
+            else []
+        )
+        if not self.source_host_allowed(url, allowed):
+            fail(403, "source_host_not_allowed")
+
+    @staticmethod
+    def diff_summary(old_text, new_text):
+        old_lines = old_text.splitlines()[:5000]
+        new_lines = new_text.splitlines()[:5000]
+        added, removed = [], []
+        for line in difflib.ndiff(old_lines, new_lines):
+            if line.startswith("+ "):
+                added.append(line[2:][:500])
+            elif line.startswith("- "):
+                removed.append(line[2:][:500])
+        return {
+            "added_lines": len(added),
+            "removed_lines": len(removed),
+            "sample_added": added[:3],
+            "sample_removed": removed[:3],
+            "truncated": len(old_text.splitlines()) > 5000
+            or len(new_text.splitlines()) > 5000,
+        }
+
     def _notify_revision(self, s):
         for epoch in self.rows(s, "memory_policy"):
             epoch.revision += 1
@@ -77,6 +125,7 @@ class KnowledgeService(LearningService):
             cached = self.replay(s, key, body)
             if cached is not None:
                 return cached
+            self._require_source_allowed(s, url)
             reservation = self.db.add(
                 s, "owner", "link_import", {"url": url, "title": title}, "pending"
             )
@@ -186,6 +235,7 @@ class KnowledgeService(LearningService):
                 or not data.get("url")
             ):
                 fail(409, "web_source_not_refreshable")
+            self._require_source_allowed(s, data["url"])
             refresh = self.db.add(
                 s,
                 "owner",
@@ -249,6 +299,7 @@ class KnowledgeService(LearningService):
             "source-refresh-material-" + refresh.id,
         )
         new_material = material_result["material"]
+        diff = self.diff_summary(data["text"], content)
         try:
             with self.db.tx() as s:
                 row = self.get(s, new_material["id"], "material")
@@ -259,6 +310,7 @@ class KnowledgeService(LearningService):
                     previous_source_id=id,
                     source_version=int(data.get("source_version", 1)) + 1,
                     refreshed_at=now(),
+                    previous_diff=diff,
                     quality={"rating": "unreviewed", "reason": "来源已更新，等待复核"},
                 )
                 row.payload = json.dumps(payload)
@@ -299,6 +351,7 @@ class KnowledgeService(LearningService):
                 content_sha256=digest,
                 new_source_id=new_material["id"],
                 new_course_id=material_result["course"]["id"],
+                diff=diff,
             )
             self._move_refresh_schedule(s, id, new_material["id"])
             current.status = "completed"

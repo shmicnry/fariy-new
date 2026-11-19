@@ -114,6 +114,7 @@ def refresh_due_source(db, autonomy, collector=fetch_text):
         if not config.get("source_refresh_enabled", False):
             return None
         daily_limit = int(config.get("source_refresh_daily_limit", 5))
+        allowed_hosts = config.get("source_allowed_hosts", [])
         attempts = sum(
             autonomy._is_today(row.created_at)
             for row in service.rows(session, "source_refresh")
@@ -125,6 +126,10 @@ def refresh_due_source(db, autonomy, collector=fetch_text):
             for row in service.rows(session, "material")
             if row.status == "active"
             and json.loads(row.payload).get("source_type") == "web_link"
+            and service.source_host_allowed(
+                json.loads(row.payload).get("url", ""),
+                allowed_hosts,
+            )
         }
         schedules = {
             json.loads(row.payload).get("source_id"): row

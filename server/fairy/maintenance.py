@@ -1,13 +1,24 @@
 """PostgreSQL backup and restore through the standard PG tools."""
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+from uuid import uuid4
 from urllib.parse import urlsplit, urlunsplit
+
+import psycopg
+from psycopg import sql
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+
+
+TABLES = ("records", "events", "requests", "scope_locks", "schema_version")
 
 
 def native_url(database_url):
@@ -98,17 +109,159 @@ def restore_database(source, database_url, expected_sha256):
     }
 
 
-def main():
-    import json
+def database_counts(database_url):
+    engine = create_engine(database_url, pool_pre_ping=True)
+    try:
+        with engine.connect() as connection:
+            return {
+                table: connection.execute(
+                    text(f"SELECT count(*) FROM {table}")
+                ).scalar_one()
+                for table in TABLES
+            }
+    finally:
+        engine.dispose()
 
+
+def restore_drill(source, database_url, expected_sha256, expected_counts=None):
+    base = make_url(database_url)
+    database_name = "fairy_restore_drill_" + uuid4().hex
+    admin = psycopg.connect(native_url(database_url), autocommit=True)
+    temporary_url = base.set(database=database_name).render_as_string(
+        hide_password=False
+    )
+    try:
+        admin.execute(
+            sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name))
+        )
+        restore_database(source, temporary_url, expected_sha256)
+        restored_counts = database_counts(temporary_url)
+        if expected_counts is not None and restored_counts != expected_counts:
+            raise ValueError("restore_drill_count_mismatch")
+        return {"restored": True, "counts": restored_counts}
+    finally:
+        admin.execute(
+            sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                sql.Identifier(database_name)
+            )
+        )
+        admin.close()
+
+
+def status_path(directory):
+    return Path(directory).absolute() / "backup-status.json"
+
+
+def read_status(directory):
+    try:
+        return json.loads(status_path(directory).read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def health_status(directory, max_age_hours=36):
+    status = read_status(directory)
+    if status is None:
+        return {
+            "status": "missing",
+            "healthy": False,
+            "stale": True,
+            "error": "backup_status_not_recorded",
+        }
+    result = dict(status)
+    completed = result.get("completed_at")
+    try:
+        age = max(
+            0,
+            int(
+                (
+                    datetime.now(timezone.utc)
+                    - datetime.fromisoformat(completed)
+                ).total_seconds()
+            ),
+        )
+        result["age_seconds"] = age
+        result["stale"] = age > max_age_hours * 3600
+        result["healthy"] = bool(result.get("healthy")) and not result["stale"]
+        if result["stale"]:
+            result["status"] = "stale"
+    except (TypeError, ValueError):
+        result.update(status="invalid", healthy=False, stale=True)
+    return result
+
+
+def write_status(directory, payload):
+    target = status_path(directory)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(target.name + f".{os.getpid()}.tmp")
+    encoded = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    descriptor = os.open(
+        temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+        0o600,
+    )
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def run_backup(database_url, directory):
+    directory = Path(directory).absolute()
+    directory.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc)
+    target = directory / ("fairy-" + timestamp.strftime("%Y%m%d-%H%M%S") + ".dump")
+    status = {
+        "started_at": timestamp.isoformat(),
+        "database": make_url(database_url).database,
+    }
+    try:
+        expected_counts = database_counts(database_url)
+        report = backup_database(database_url, target)
+        drill = restore_drill(
+            target,
+            database_url,
+            report["sha256"],
+            expected_counts=expected_counts,
+        )
+        status.update(
+            report,
+            status="healthy",
+            healthy=True,
+            completed_at=datetime.now(timezone.utc).isoformat(),
+            expected_counts=expected_counts,
+            restore_drill=drill,
+            error=None,
+        )
+    except Exception as error:
+        status.update(
+            status="failed",
+            healthy=False,
+            completed_at=datetime.now(timezone.utc).isoformat(),
+            file=str(target),
+            error=str(error),
+        )
+        write_status(directory, status)
+        raise
+    write_status(directory, status)
+    return status
+
+
+def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=["backup", "restore"])
+    parser.add_argument("action", choices=["backup", "restore", "run"])
     parser.add_argument("source")
     parser.add_argument("target")
     parser.add_argument("--sha256")
     args = parser.parse_args()
     if args.action == "backup":
         result = backup_database(args.source, args.target)
+    elif args.action == "run":
+        result = run_backup(args.source, args.target)
     else:
         if not args.sha256:
             parser.error("restore requires --sha256 from backup report")

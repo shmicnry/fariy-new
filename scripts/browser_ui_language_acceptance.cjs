@@ -65,6 +65,7 @@ async function request(path, method = 'GET', body) {
     await page.getByLabel('启用自动网页来源检查').check();
     await page.getByLabel('检查间隔（小时）').fill('12');
     await page.getByLabel('每日网络检查上限').fill('4');
+    await page.getByLabel('允许的网页域名').fill('example.com\n*.trusted.example');
     await page.getByRole('button', {name: '保存来源检查计划', exact: true}).click();
     await page.locator('.toast').filter({hasText: '保存来源检查计划已完成'}).waitFor();
     const sourceCard = page.locator('article').filter({hasText: longName});
@@ -152,6 +153,7 @@ async function request(path, method = 'GET', body) {
         source_refresh_enabled: currentConfig.source_refresh_enabled ?? false,
         source_refresh_interval_hours: currentConfig.source_refresh_interval_hours ?? 24,
         source_refresh_daily_limit: currentConfig.source_refresh_daily_limit ?? 5,
+        source_allowed_hosts: currentConfig.source_allowed_hosts || [],
     });
     await page.locator('#nav a[href="#evolution"]').click();
     await page.getByRole('button', {name: '保存自主预算', exact: true}).click();
@@ -162,6 +164,10 @@ async function request(path, method = 'GET', body) {
     assert.equal(updatedConfig.source_refresh_enabled, true);
     assert.equal(updatedConfig.source_refresh_interval_hours, 12);
     assert.equal(updatedConfig.source_refresh_daily_limit, 4);
+    assert.deepEqual(updatedConfig.source_allowed_hosts, [
+        'example.com',
+        '*.trusted.example',
+    ]);
 
     const experimentDraft = 'background-event-draft-' + crypto.randomUUID();
     const experimentField = page.getByLabel('实验用例与候选输出（JSON）');

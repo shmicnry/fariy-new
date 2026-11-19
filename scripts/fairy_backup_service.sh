@@ -26,9 +26,7 @@ write_wrapper() {
     cat >"$wrapper" <<EOF
 #!/bin/sh
 set -eu
-stamp=\$(date +%Y%m%d-%H%M%S)
-target="$backup_dir/fairy-\$stamp.dump"
-"$python_path" -m fairy.maintenance backup "$database" "\$target"
+"$python_path" -m fairy.maintenance run "$database" "$backup_dir"
 find "$backup_dir" -type f -name 'fairy-*.dump' -mtime +$retention_days -delete
 EOF
     chmod 700 "$wrapper"

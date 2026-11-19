@@ -141,6 +141,32 @@ def test_failed_link_retry_does_not_fetch_again(env):
     assert r["status"] == again["status"] == "failed"
 
 
+def test_source_allowlist_blocks_unapproved_hosts(env):
+    app, c, svc = env
+    app.state.service.configure(
+        0,
+        {"source_allowed_hosts": ["allowed.example", "*.trusted.example"]},
+    )
+    with pytest.raises(Exception, match="source_host_not_allowed"):
+        svc.link(
+            "https://blocked.example/path",
+            "阻止",
+            "blocked",
+            lambda _: pytest.fail("blocked host must not be fetched"),
+        )
+    assert svc.source_host_allowed(
+        "https://sub.trusted.example/path",
+        ["*.trusted.example"],
+    )
+    imported = svc.link(
+        "https://allowed.example/path",
+        "允许",
+        "allowed",
+        lambda _: "允许的正文。",
+    )
+    assert imported["status"] == "completed"
+
+
 def test_web_source_refresh_versions_and_invalidates_derived_records(
     env, monkeypatch
 ):
@@ -190,6 +216,9 @@ def test_web_source_refresh_versions_and_invalidates_derived_records(
     assert new_source["previous_source_id"] == old_source["id"]
     assert new_source["source_version"] == 2
     assert new_source["quality"]["rating"] == "unreviewed"
+    assert refreshed["diff"]["added_lines"] == 1
+    assert refreshed["diff"]["removed_lines"] == 1
+    assert new_source["previous_diff"]["sample_added"] == ["植物需要光照。"]
     assert any(
         item["title"] == "指南" and item["stage"] == "queued"
         for item in svc.list("course")

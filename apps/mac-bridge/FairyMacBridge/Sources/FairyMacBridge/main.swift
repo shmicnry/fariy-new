@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import Foundation
 import ImageIO
+import PDFKit
 import Vision
 
 struct BridgeError: LocalizedError {
@@ -114,13 +115,7 @@ func accessibilityTree(
     return output
 }
 
-func recognizeText(path: String) throws -> [String: Any] {
-    let url = URL(fileURLWithPath: path)
-    guard url.isFileURL,
-          let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-          let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-        throw BridgeError(errorDescription: "ocr_image_unreadable")
-    }
+func recognizeImage(_ image: CGImage, includeLines: Bool = true) throws -> [String: Any] {
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
     request.usesLanguageCorrection = true
@@ -140,10 +135,75 @@ func recognizeText(path: String) throws -> [String: Any] {
             "height": box.size.height,
         ]
     }
-    return [
+    var result: [String: Any] = [
         "method": "macos_vision_ocr",
         "line_count": lines.count,
-        "lines": lines,
+    ]
+    if includeLines {
+        result["lines"] = lines
+    } else {
+        result["text"] = lines.compactMap { $0["text"] as? String }.joined(separator: "\n")
+    }
+    return result
+}
+
+func recognizeText(path: String) throws -> [String: Any] {
+    let url = URL(fileURLWithPath: path)
+    guard url.isFileURL,
+          let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        throw BridgeError(errorDescription: "ocr_image_unreadable")
+    }
+    return try recognizeImage(image)
+}
+
+func recognizePDF(path: String, maxPages: Int = 100) throws -> [String: Any] {
+    let url = URL(fileURLWithPath: path)
+    guard let document = PDFDocument(url: url), document.pageCount > 0 else {
+        throw BridgeError(errorDescription: "ocr_pdf_unreadable")
+    }
+    var pages: [[String: Any]] = []
+    var totalCharacters = 0
+    for index in 0..<min(document.pageCount, maxPages) {
+        guard let page = document.page(at: index) else { continue }
+        let bounds = page.bounds(for: .mediaBox)
+        let scale = min(2.0, 2000.0 / max(bounds.width, bounds.height, 1))
+        let size = NSSize(
+            width: max(1, bounds.width * scale),
+            height: max(1, bounds.height * scale)
+        )
+        let image = NSImage(size: size)
+        image.lockFocus()
+        NSColor.white.setFill()
+        NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill()
+        if let context = NSGraphicsContext.current?.cgContext {
+            context.saveGState()
+            context.scaleBy(x: scale, y: scale)
+            page.draw(with: .mediaBox, to: context)
+            context.restoreGState()
+        }
+        image.unlockFocus()
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            continue
+        }
+        let recognized = try recognizeImage(cgImage, includeLines: false)
+        let text = (recognized["text"] as? String ?? "").trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        totalCharacters += text.count
+        if totalCharacters > 256_000 {
+            throw BridgeError(errorDescription: "ocr_pdf_text_too_large")
+        }
+        pages.append([
+            "page": index + 1,
+            "text": text,
+            "line_count": recognized["line_count"] ?? 0,
+        ])
+    }
+    return [
+        "method": "macos_vision_pdf_ocr",
+        "page_count": pages.count,
+        "pages": pages,
     ]
 }
 
@@ -154,7 +214,7 @@ func main() throws {
     case "status":
         try writeJSON([
             "bridge": "fairy-mac-bridge",
-            "version": "0.1.0",
+            "version": "0.1.1",
             "read_only": true,
             "input_injection": false,
             "screen_capture_content": false,
@@ -187,9 +247,14 @@ func main() throws {
             throw BridgeError(errorDescription: "ocr_path_required")
         }
         try writeJSON(try recognizeText(path: arguments[2]))
+    case "ocr-pdf":
+        guard arguments.count > 2 else {
+            throw BridgeError(errorDescription: "ocr_pdf_path_required")
+        }
+        try writeJSON(try recognizePDF(path: arguments[2]))
     default:
         throw BridgeError(
-            errorDescription: "usage: FairyMacBridge status|applications|ax-tree [bundle-id]|ocr <path>"
+            errorDescription: "usage: FairyMacBridge status|applications|ax-tree [bundle-id]|ocr <image>|ocr-pdf <pdf>"
         )
     }
 }

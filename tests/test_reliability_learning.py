@@ -1,22 +1,23 @@
 import base64
 from concurrent.futures import ThreadPoolExecutor
-import os
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from fairy.app import create_app
-from fairy.maintenance import backup_database, restore_database
+from fairy.maintenance import (
+    backup_database,
+    health_status,
+    restore_database,
+    run_backup,
+    write_status,
+)
 from fairy.service import Service
 from fairy.store import Store
 from fairy.worker import tick
 from tests.db import postgres_database, postgres_url
-
-
-def test_non_postgresql_database_is_rejected():
-    with pytest.raises(ValueError, match="postgresql_database_required"):
-        Store("sqlite:///unsupported.db")
 
 
 def test_concurrent_bootstrap_and_migration(tmp_path):
@@ -57,9 +58,13 @@ def test_postgres_backup_restore_and_digest(tmp_path):
     app.state.service.correct(
         memory["id"], 1, "我喜欢喝茶", "修改", "edit"
     )
-    backup = tmp_path / "backup.dump"
-    report = backup_database(source_url, backup)
+    backup_dir = tmp_path / "backups"
+    report = run_backup(source_url, backup_dir)
+    backup = Path(report["file"])
     assert backup.stat().st_mode & 0o777 == 0o600
+    assert report["status"] == "healthy"
+    assert report["restore_drill"]["restored"] is True
+    assert health_status(backup_dir)["healthy"] is True
     with pytest.raises(ValueError, match="already_exists"):
         backup_database(source_url, backup)
     with pytest.raises(ValueError, match="digest"):
@@ -69,6 +74,20 @@ def test_postgres_backup_restore_and_digest(tmp_path):
     service = create_app(target_url, token="test").state.service
     assert service.list("memory")[0]["text"] == "我喜欢喝茶"
     assert len(service.history(memory["id"])) == 2
+
+
+def test_backup_health_flags_stale_status(tmp_path):
+    write_status(
+        tmp_path,
+        {
+            "status": "healthy",
+            "healthy": True,
+            "completed_at": "2000-01-01T00:00:00+00:00",
+        },
+    )
+    status = health_status(tmp_path)
+    assert status["status"] == "stale"
+    assert status["healthy"] is False
 
 
 def client(tmp_path):

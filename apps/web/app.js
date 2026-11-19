@@ -479,6 +479,10 @@ async function render() {
             title: '学习与自主任务 worker',
             ...(await api('worker/status'))
         }]);
+        records(panel('备份与恢复'), [{
+            title: 'PostgreSQL 每日备份',
+            ...(await api('maintenance/backup/status'))
+        }]);
         records(panel('持久任务'), await api('jobs'))
     } else if (route === 'mind') {
         const c = await api('cognition/snapshot');
@@ -741,7 +745,8 @@ async function render() {
                 autonomy_daily_items: conf.autonomy_daily_items ?? 10,
                 source_refresh_enabled: Boolean(conf.source_refresh_enabled),
                 source_refresh_interval_hours: conf.source_refresh_interval_hours ?? 24,
-                source_refresh_daily_limit: conf.source_refresh_daily_limit ?? 5
+                source_refresh_daily_limit: conf.source_refresh_daily_limit ?? 5,
+                source_allowed_hosts: conf.source_allowed_hosts || []
             });
             await render()
         }));
