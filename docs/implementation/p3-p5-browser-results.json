@@ -4,6 +4,7 @@
     "macOS-style management shell",
     "read-only Mac status",
     "allowlisted launch scope configured without launching",
+    "allowlisted create-only file write with hash verification",
     "skill install/grant/invoke/disable",
     "autonomy candidate generation and budget acceptance",
     "autonomy goal start, pause and actual-time settlement",
@@ -15,6 +16,7 @@
     "no browser runtime errors"
   ],
   "synthetic_data": true,
+  "actual_file_created": true,
   "actual_app_launched": false,
   "runtime_evolution_applied": false
 }

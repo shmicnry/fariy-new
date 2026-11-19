@@ -4558,6 +4558,11 @@
             "title": "Mac Execute",
             "default": false
           },
+          "mac_file_write": {
+            "type": "boolean",
+            "title": "Mac File Write",
+            "default": false
+          },
           "autonomous_paid": {
             "type": "boolean",
             "title": "Autonomous Paid",
@@ -5381,6 +5386,7 @@
                 "mac.read_status",
                 "mac.read_ax",
                 "mac.open_app",
+                "mac.write_file",
                 "learning.read",
                 "world.read",
                 "autonomy.read"
@@ -5426,6 +5432,18 @@
               }
             ],
             "title": "Path"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 65536
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
           }
         },
         "additionalProperties": false,

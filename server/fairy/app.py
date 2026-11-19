@@ -132,6 +132,7 @@ class Config(Strict):
     daily_minutes: int = Field(default=45, ge=0, le=240)
     pet_enabled: bool = False
     mac_execute: bool = False
+    mac_file_write: bool = False
     autonomous_paid: bool = False
     mac_allowed_apps: list[str] = Field(default_factory=list, max_length=16)
     mac_allowed_paths: list[str] = Field(default_factory=list, max_length=16)
@@ -368,6 +369,12 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "mac_execute": bool(config.get("mac_execute")),
             "mac_execute_scope": (
                 "allowlisted_app_launch" if config.get("mac_execute") else "disabled"
+            ),
+            "mac_file_write": bool(config.get("mac_file_write")),
+            "mac_file_write_scope": (
+                "allowlisted_directory_create_only"
+                if config.get("mac_file_write")
+                else "disabled"
             ),
             "video": False,
             "automatic_mastery": False,

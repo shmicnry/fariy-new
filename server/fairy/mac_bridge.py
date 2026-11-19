@@ -1,7 +1,8 @@
-"""Read-only Mac bridge with realpath confinement and no arbitrary command surface."""
+"""Realpath-confined Mac bridge with read-only probes and explicit write scopes."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import platform
@@ -28,6 +29,7 @@ class MacBridge:
                     "mac_allowed_apps": [],
                     "mac_allowed_paths": [],
                     "mac_execute": False,
+                    "mac_file_write": False,
                 }
             return json.loads(configs[0].payload)
 
@@ -95,7 +97,11 @@ class MacBridge:
             "release": platform.release(),
             "macos_version": version,
             "macos_build": build,
-            "executor_mode": "execute" if config.get("mac_execute") else "observe_only",
+            "executor_mode": (
+                "scoped_actions"
+                if config.get("mac_execute") or config.get("mac_file_write")
+                else "observe_only"
+            ),
             "configured_app_count": len(config.get("mac_allowed_apps", [])),
             "configured_path_count": len(config.get("mac_allowed_paths", [])),
             "accessibility_permission": (
@@ -114,6 +120,9 @@ class MacBridge:
             "screen_capture": False,
             "execute_action_available": bool(
                 config.get("mac_execute") and config.get("mac_allowed_apps")
+            ),
+            "file_create_action_available": bool(
+                config.get("mac_file_write") and config.get("mac_allowed_paths")
             ),
         }
 
@@ -237,6 +246,109 @@ class MacBridge:
             "entries": entries,
             "truncated": len(children) > 100,
             "read_only": True,
+        }
+
+    def create_file(self, requested, content):
+        config = self._config()
+        if not config.get("mac_file_write"):
+            fail(409, "mac_file_write_not_enabled")
+        if not requested:
+            fail(422, "path_required")
+        if not isinstance(content, str) or not content:
+            fail(422, "file_content_required")
+        payload = content.encode("utf-8")
+        if len(payload) > 256 * 1024:
+            fail(413, "file_content_too_large")
+        target = Path(requested)
+        if not target.is_absolute() or target.name in ("", ".", ".."):
+            fail(422, "file_path_must_be_absolute")
+
+        roots = []
+        for raw in config.get("mac_allowed_paths", []):
+            try:
+                roots.append(Path(raw).resolve(strict=True))
+            except (OSError, RuntimeError):
+                continue
+        if not roots:
+            fail(409, "no_allowlisted_paths")
+        try:
+            parent = target.parent.resolve(strict=True)
+        except (OSError, RuntimeError):
+            fail(404, "parent_directory_not_found")
+        resolved = parent / target.name
+        if not any(
+            resolved == root or resolved.is_relative_to(root)
+            for root in roots
+        ):
+            fail(403, "path_outside_allowlist")
+        if resolved.exists() or target.is_symlink():
+            fail(409, "file_already_exists")
+
+        try:
+            directory_fd = os.open(
+                parent,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+            )
+        except OSError:
+            fail(403, "parent_directory_not_writable")
+
+        created = False
+        try:
+            flags = (
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | getattr(os, "O_NOFOLLOW", 0)
+            )
+            try:
+                file_fd = os.open(
+                    target.name,
+                    flags,
+                    0o600,
+                    dir_fd=directory_fd,
+                )
+            except FileExistsError:
+                fail(409, "file_already_exists")
+            except OSError:
+                fail(403, "file_not_writable")
+            created = True
+            try:
+                with os.fdopen(file_fd, "wb") as handle:
+                    handle.write(payload)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            except OSError:
+                try:
+                    os.unlink(target.name, dir_fd=directory_fd)
+                except OSError:
+                    pass
+                fail(503, "file_write_failed")
+        finally:
+            os.close(directory_fd)
+
+        try:
+            written = resolved.read_bytes()
+        except OSError:
+            if created:
+                try:
+                    resolved.unlink()
+                except OSError:
+                    pass
+            fail(503, "file_verification_failed")
+        digest = hashlib.sha256(written).hexdigest()
+        expected = hashlib.sha256(payload).hexdigest()
+        if written != payload or digest != expected:
+            try:
+                resolved.unlink()
+            except OSError:
+                pass
+            fail(503, "file_verification_failed")
+        return {
+            "path": str(resolved),
+            "bytes": len(written),
+            "sha256": digest,
+            "overwrote": False,
+            "verification": "hash_and_byte_readback_matched",
         }
 
     def ax_tree(self, bundle_id=None):

@@ -18,6 +18,7 @@ Permission = Literal[
     "mac.read_status",
     "mac.read_ax",
     "mac.open_app",
+    "mac.write_file",
     "learning.read",
     "world.read",
     "autonomy.read",
@@ -26,6 +27,7 @@ Implementation = Literal[
     "mac_status",
     "mac_ax_tree",
     "mac_open_app",
+    "mac_create_file",
     "learning_search",
     "world_query",
     "autonomy_suggest",
@@ -52,6 +54,7 @@ class SkillInvokeInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(default="", max_length=1000)
     path: str | None = Field(default=None, max_length=2000)
+    content: str | None = Field(default=None, max_length=65536)
 
 
 BUILTINS = (
@@ -70,6 +73,14 @@ BUILTINS = (
         "purpose": "读取系统版本、权限占位状态与应用目录清单，不执行输入注入或屏幕采集。",
         "implementation": "mac_status",
         "permissions": ["mac.read_status"],
+    },
+    {
+        "key": "system.mac_create_file",
+        "name": "Mac 创建允许文件",
+        "version": "1.0.0",
+        "purpose": "只在所有者允许目录中创建新文件，不覆盖已有文件，并在写入后校验字节和 SHA-256。",
+        "implementation": "mac_create_file",
+        "permissions": ["mac.write_file"],
     },
     {
         "key": "system.mac_ax_tree",
@@ -244,6 +255,14 @@ class SkillService(Service):
             elif data["implementation"] == "mac_open_app":
                 result = await asyncio.to_thread(
                     MacBridge(self).open_app, body.query.strip()
+                )
+            elif data["implementation"] == "mac_create_file":
+                if body.content is None:
+                    fail(422, "file_content_required")
+                result = await asyncio.to_thread(
+                    MacBridge(self).create_file,
+                    body.path,
+                    body.content,
                 )
             elif data["implementation"] == "learning_search":
                 from .cognition import relevance

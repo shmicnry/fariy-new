@@ -565,6 +565,8 @@ class Service:
             fail(422, "capability_not_implemented_cannot_enable")
         if data.get("mac_execute") and not data.get("mac_allowed_apps"):
             fail(422, "mac_execute_requires_allowed_apps")
+        if data.get("mac_file_write") and not data.get("mac_allowed_paths"):
+            fail(422, "mac_file_write_requires_allowed_paths")
         if not 0 <= data.get("daily_minutes", 45) <= 240:
             fail(422, "invalid_daily_budget")
         with self.db.tx() as s:

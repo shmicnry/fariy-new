@@ -421,7 +421,10 @@ async function run(fn) {
     try {
         await fn()
     } catch (e) {
-        $('error').textContent = e.message
+        const message = String(e?.message || '操作失败');
+        const code = message.match(/"([a-z][a-z0-9_]+)"/)?.[1]
+            || message.match(/^([a-z][a-z0-9_]+)$/)?.[1];
+        $('error').textContent = explain(code || message)
     }
 }
 async function renderPreservingScroll() {
@@ -822,7 +825,8 @@ async function renderRoute(route, ui) {
                 revision: conf.revision,
                 daily_minutes: Number(mins.value),
                 pet_enabled: check.checked,
-                mac_execute: false,
+                mac_execute: Boolean(conf.mac_execute),
+                mac_file_write: Boolean(conf.mac_file_write),
                 autonomous_paid: false,
                 mac_allowed_apps: conf.mac_allowed_apps || [],
                 mac_allowed_paths: conf.mac_allowed_paths || [],

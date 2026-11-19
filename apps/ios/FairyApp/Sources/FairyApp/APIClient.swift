@@ -261,8 +261,19 @@ actor FairyAPI {
         _ = try await request("skills/registry/\(id)/disable", method: "POST", body: try encode([:]))
     }
 
-    func invokeSkill(_ id: String, query: String) async throws -> String {
-        let body = try encode(["query": query, "path": NSNull()])
+    func invokeSkill(
+        _ id: String,
+        query: String = "",
+        path: String? = nil,
+        content: String? = nil
+    ) async throws -> String {
+        let pathValue: Any = path.map { $0 as Any } ?? NSNull()
+        let contentValue: Any = content.map { $0 as Any } ?? NSNull()
+        let body = try encode([
+            "query": query,
+            "path": pathValue,
+            "content": contentValue,
+        ])
         let data = try await request(
             "skills/registry/\(id)/invoke",
             method: "POST",

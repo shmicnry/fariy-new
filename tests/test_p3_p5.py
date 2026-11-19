@@ -7,6 +7,7 @@ import json
 import os
 import plistlib
 import re
+import stat
 import subprocess
 import sys
 
@@ -32,7 +33,7 @@ def env(tmp_path):
 def test_builtin_skill_install_grant_invoke_and_disable(env):
     app, client = env
     registry = client.get("/v2/skills/registry").json()
-    assert len(registry) == 6
+    assert len(registry) == 7
     status_skill = next(
         item for item in registry if item["implementation"] == "mac_status"
     )
@@ -119,6 +120,87 @@ def test_mac_files_realpath_confinement(env, tmp_path):
     )
     assert client.get("/v2/mac/status").json()["execute_action_available"] is False
     assert client.get("/v2/mac/apps").json()["launch_available"] is False
+
+
+def test_mac_create_file_is_scoped_exclusive_and_verified(env, tmp_path):
+    app, client = env
+    allowed = tmp_path / "allowed"
+    outside = tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    (allowed / "escape").symlink_to(outside, target_is_directory=True)
+    assert (
+        client.put(
+            "/v2/config",
+            json={"revision": 0, "mac_file_write": True},
+        ).status_code
+        == 422
+    )
+    configured = client.put(
+        "/v2/config",
+        json={
+            "revision": 0,
+            "mac_file_write": True,
+            "mac_allowed_paths": [str(allowed)],
+        },
+    )
+    assert configured.status_code == 200, configured.text
+    assert client.get("/v2/mac/status").json()["file_create_action_available"] is True
+
+    registry = client.get("/v2/skills/registry").json()
+    skill = next(
+        item for item in registry if item["implementation"] == "mac_create_file"
+    )
+    installed = client.post(
+        "/v2/skills/registry/" + skill["id"] + "/install"
+    ).json()
+    granted = client.post(
+        "/v2/skills/registry/" + skill["id"] + "/grant",
+        json={
+            "revision": installed["revision"],
+            "permissions": ["mac.write_file"],
+            "expires_minutes": 5,
+        },
+    )
+    assert granted.status_code == 200, granted.text
+
+    content = "Fairy 受控文件\n可核对内容"
+    target = allowed / "fairy-note.txt"
+    result = client.post(
+        "/v2/skills/registry/" + skill["id"] + "/invoke",
+        json={"path": str(target), "content": content},
+    )
+    assert result.status_code == 200, result.text
+    payload = result.json()["result"]
+    assert target.read_text() == content
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+    assert payload["bytes"] == len(content.encode("utf-8"))
+    assert payload["overwrote"] is False
+    assert payload["verification"] == "hash_and_byte_readback_matched"
+
+    assert (
+        client.post(
+            "/v2/skills/registry/" + skill["id"] + "/invoke",
+            json={"path": str(target), "content": "不应覆盖"},
+        ).status_code
+        == 409
+    )
+    assert target.read_text() == content
+    assert (
+        client.post(
+            "/v2/skills/registry/" + skill["id"] + "/invoke",
+            json={"path": str(allowed / "escape" / "blocked.txt"), "content": "blocked"},
+        ).status_code
+        == 403
+    )
+    assert not (outside / "blocked.txt").exists()
+    assert (
+        client.post(
+            "/v2/skills/registry/" + skill["id"] + "/invoke",
+            json={"path": str(allowed / "empty.txt"), "content": ""},
+        ).status_code
+        == 422
+    )
 
 
 def test_config_allowlists_are_bounded_and_normalized(env):

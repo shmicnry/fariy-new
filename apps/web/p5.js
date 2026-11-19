@@ -86,6 +86,7 @@ export async function renderAutonomy(ui) {
                 daily_minutes: config.daily_minutes,
                 pet_enabled: config.pet_enabled,
                 mac_execute: Boolean(config.mac_execute),
+                mac_file_write: Boolean(config.mac_file_write),
                 autonomous_paid: false,
                 mac_allowed_apps: config.mac_allowed_apps || [],
                 mac_allowed_paths: config.mac_allowed_paths || [],

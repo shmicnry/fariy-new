@@ -184,7 +184,12 @@ final class FairyModel: ObservableObject {
         }
     }
 
-    func invokeSkill(_ skill: SkillItem, query: String) async {
+    func invokeSkill(
+        _ skill: SkillItem,
+        query: String = "",
+        path: String? = nil,
+        content: String? = nil
+    ) async {
         guard let api else {
             lastError = "尚未连接 Fairy 服务。"
             return
@@ -192,7 +197,12 @@ final class FairyModel: ObservableObject {
         isWorking = true
         defer { isWorking = false }
         do {
-            skillOutputs[skill.id] = try await api.invokeSkill(skill.id, query: query)
+            skillOutputs[skill.id] = try await api.invokeSkill(
+                skill.id,
+                query: query,
+                path: path,
+                content: content
+            )
         } catch {
             lastError = error.localizedDescription
         }
@@ -1036,6 +1046,9 @@ struct SkillDetailView: View {
     @EnvironmentObject private var model: FairyModel
     let skill: SkillItem
     @State private var query = ""
+    @State private var filePath = ""
+    @State private var fileContent = ""
+    @State private var confirmFileCreate = false
 
     private var currentSkill: SkillItem {
         model.skills.first(where: { $0.id == skill.id }) ?? skill
@@ -1061,9 +1074,32 @@ struct SkillDetailView: View {
             }
             if currentSkill.enabled {
                 Section("执行一次") {
-                    TextField("Bundle ID、检索词或留空", text: $query)
-                    Button("执行") {
-                        Task { await model.invokeSkill(currentSkill, query: query) }
+                    if currentSkill.implementation == "mac_create_file" {
+                        TextField("允许目录内的新文件绝对路径", text: $filePath)
+                        TextEditor(text: $fileContent)
+                            .frame(minHeight: 120)
+                            .overlay {
+                                if fileContent.isEmpty {
+                                    Text("写入新文件的文字内容")
+                                        .foregroundStyle(.tertiary)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                        .padding(8)
+                                        .allowsHitTesting(false)
+                                }
+                            }
+                        Button("创建受控文件") {
+                            confirmFileCreate = true
+                        }
+                        .disabled(
+                            filePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                || fileContent.isEmpty
+                                || model.isWorking
+                        )
+                    } else {
+                        TextField("Bundle ID、检索词或留空", text: $query)
+                        Button("执行") {
+                            Task { await model.invokeSkill(currentSkill, query: query) }
+                        }
                     }
                     if let output = model.skillOutputs[currentSkill.id] {
                         ScrollView {
@@ -1078,6 +1114,24 @@ struct SkillDetailView: View {
             }
         }
         .navigationTitle(skill.name)
+        .confirmationDialog(
+            "创建允许文件？",
+            isPresented: $confirmFileCreate,
+            titleVisibility: .visible
+        ) {
+            Button("创建并校验 SHA-256") {
+                Task {
+                    await model.invokeSkill(
+                        currentSkill,
+                        path: filePath.trimmingCharacters(in: .whitespacesAndNewlines),
+                        content: fileContent
+                    )
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("仅在允许目录中创建新文件，不覆盖已有文件；写入后会回读字节与哈希。")
+        }
     }
 }
 

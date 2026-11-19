@@ -11,6 +11,7 @@ This package is the native implementation starting point shared by macOS and iOS
 - All screens use the same local Fairy API.
 - The owner token is stored in Keychain with device-only accessibility.
 - Memory correction/forgetting, course assessment, approvals, skill lifecycle and autonomy candidates are actionable from the native UI.
+- The native skill detail can create one new file inside an allowlisted directory after confirmation; results include byte and SHA-256 verification.
 - Eight-second foreground polling keeps native screens close to server state.
 - Device-local notifications can be enabled from Settings; APNs still requires signing and Apple credentials.
 - Conversation replies can be read with the device's `AVSpeechSynthesizer`.

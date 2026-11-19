@@ -1,6 +1,7 @@
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const {spawnSync} = require('node:child_process');
 const fs = require('node:fs');
+const path = require('node:path');
 const assert = require('node:assert/strict');
 
 const base = process.env.FAIRY_TEST_URL || 'http://127.0.0.1:18860';
@@ -55,17 +56,23 @@ async function api(path, method = 'GET', body) {
     await page.waitForFunction(() => navigator.serviceWorker?.controller || navigator.serviceWorker?.ready);
 
     await page.locator('#nav a[href="#mac"]').click();
-    await page.getByRole('heading', {name: '这台 Mac · 只读状态'}).waitFor();
+    await page.getByRole('heading', {name: '这台 Mac · 权限与范围'}).waitFor();
+    const allowedDirectory = path.join(workerState, 'acceptance-allowed-files');
+    fs.mkdirSync(allowedDirectory, {recursive: true});
     await page.getByLabel('允许应用').fill('TextEdit');
+    await page.getByLabel('允许目录', {exact: true}).fill(allowedDirectory);
     await page.getByLabel('允许启动允许列表应用').check();
+    await page.getByLabel('允许在允许目录中创建新文件').check();
     await page.getByRole('button', {name: '保存设备范围'}).click();
-    await page.getByRole('heading', {name: '这台 Mac · 只读状态'}).waitFor();
+    await page.getByRole('heading', {name: '这台 Mac · 权限与范围'}).waitFor();
     await page.getByRole('button', {name: '保存设备范围'}).waitFor();
     await resetScroll();
     await page.waitForTimeout(400);
     const capabilities = await api('capabilities');
     assert.equal(capabilities.mac_execute, true);
     assert.equal(capabilities.mac_execute_scope, 'allowlisted_app_launch');
+    assert.equal(capabilities.mac_file_write, true);
+    assert.equal(capabilities.mac_file_write_scope, 'allowlisted_directory_create_only');
     await page.screenshot({
         path: 'docs/implementation/screenshots/p3-mac-desktop.png',
         fullPage: false,
@@ -79,6 +86,25 @@ async function api(path, method = 'GET', body) {
     await statusSkill.locator('.skill-output').getByText(/arbitrary_shell/).waitFor();
     await statusSkill.getByRole('button', {name: '停用并撤销授权'}).click();
     await page.getByRole('dialog').getByRole('button', {name: '停用并撤销授权'}).click();
+
+    const fileSkill = page.locator('article').filter({has: page.getByRole('heading', {name: 'Mac 创建允许文件'})});
+    await fileSkill.getByRole('button', {name: '安装并检查'}).click();
+    await fileSkill.getByRole('button', {name: '确认授权并启用'}).click();
+    const targetFile = path.join(allowedDirectory, `acceptance-${crypto.randomUUID()}.txt`);
+    const targetContent = 'Fairy browser acceptance file';
+    await fileSkill.getByLabel('新文件的绝对路径').fill(targetFile);
+    await fileSkill.getByLabel('新文件内容').fill(targetContent);
+    await fileSkill.getByRole('button', {name: '创建受控文件'}).click();
+    const createDialog = page.getByRole('dialog');
+    await createDialog.getByRole('button', {name: '创建受控文件'}).click();
+    await fileSkill.locator('.skill-output').getByText(/hash_and_byte_readback_matched/).waitFor();
+    assert.equal(fs.readFileSync(targetFile, 'utf8'), targetContent);
+    await resetScroll();
+    await page.waitForTimeout(2500);
+    await page.screenshot({
+        path: 'docs/implementation/screenshots/p3-mac-file-create.png',
+        fullPage: false,
+    });
 
     const material = await api('learning/materials', 'POST', {
         title: '自主候选用例',
@@ -113,6 +139,9 @@ async function api(path, method = 'GET', body) {
     await page.locator('#nav a[href="#evolution"]').click();
     await page.getByLabel('启用自主候选').check();
     await page.getByRole('button', {name: '保存自主预算'}).click();
+    const preservedConfig = (await api('config'))[0];
+    assert.equal(preservedConfig.mac_execute, true);
+    assert.equal(preservedConfig.mac_file_write, true);
     await page.waitForTimeout(250);
     await page.getByRole('button', {name: '从当前缺口刷新候选'}).click();
     const candidate = page.locator('article').filter({hasText: '继续练习：自主候选用例'});
@@ -180,6 +209,7 @@ async function api(path, method = 'GET', body) {
                 'macOS-style management shell',
                 'read-only Mac status',
                 'allowlisted launch scope configured without launching',
+                'allowlisted create-only file write with hash verification',
                 'skill install/grant/invoke/disable',
                 'autonomy candidate generation and budget acceptance',
                 'autonomy goal start, pause and actual-time settlement',
@@ -191,6 +221,7 @@ async function api(path, method = 'GET', body) {
                 'no browser runtime errors',
             ],
             synthetic_data: true,
+            actual_file_created: true,
             actual_app_launched: false,
             runtime_evolution_applied: false,
         }, null, 2) + '\n'

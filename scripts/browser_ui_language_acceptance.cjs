@@ -144,6 +144,7 @@ async function request(path, method = 'GET', body) {
         daily_minutes: currentConfig.daily_minutes ?? 45,
         pet_enabled: currentConfig.pet_enabled ?? false,
         mac_execute: true,
+        mac_file_write: currentConfig.mac_file_write ?? false,
         mac_allowed_apps: ['TextEdit'],
         mac_allowed_paths: currentConfig.mac_allowed_paths || [],
         autonomous_paid: currentConfig.autonomous_paid ?? false,
@@ -186,7 +187,7 @@ async function request(path, method = 'GET', body) {
     assert.equal(await experimentField.inputValue(), experimentDraft);
     assert.equal(await page.locator('#syncNotice').isVisible(), true);
 
-    await page.locator('#nav a[href="#models"]').click();
+    await page.locator('#systemNav a[href="#models"]').click();
     await page.getByLabel('输入价格 / 百万 Token').fill('1.25');
     await page.getByLabel('输出价格 / 百万 Token').fill('2.5');
     await page.getByLabel('每日云费用上限').fill('5');

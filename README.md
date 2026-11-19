@@ -16,7 +16,7 @@
 
 上一阶段：[自主执行账本与表单保稿](docs/implementation/自主执行账本与表单保稿.md)。自主目标现支持启动、暂停、继续、完成结算、取消释放和无上限时间自动停机；Web 与 SwiftUI 已同步。
 
-最新全量审计：[P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)。修复技能调用状态未持久化、自主页覆盖 Mac 授权、原生请求超时、PWA 离线回退、配置边界、Compose 端口和 CI PostgreSQL 缺口；加入执行账本、来源刷新、周期检查、OCR、备份演练、费用预算与模型草稿后 PostgreSQL 全量回归 **141 passed**。
+最新全量审计：[P3–P5 缺漏审计与修复](docs/implementation/P3-P5缺漏审计与修复.md)。修复技能调用状态未持久化、自主页覆盖 Mac 授权、原生请求超时、PWA 离线回退、配置边界、Compose 端口和 CI PostgreSQL 缺口；加入执行账本、来源刷新、周期检查、OCR、备份演练、费用预算、模型草稿与允许目录内受控文件创建后，PostgreSQL 全量回归 **142 passed**。
 
 最新审计：[P2缺漏审计与修复](docs/implementation/P2审计修复.md)。修复文件幂等、学习结论撤销、精确最终依据、来源失效、测验取消和撤回入口等问题；最终在隔离 Postgres 16 上 **108 项回归全部通过**。
 
@@ -81,7 +81,7 @@ Ollama 应已启动，且模型已经安装。本次在你的机器上使用已�
 
 ## Mac、iPhone 与 PWA
 
-「Mac 操作」页可配置应用与目录允许范围。`mac_execute` 只有在至少一个允许应用存在时才能开启；开启后仍需要安装并限时授权 `Mac 启动允许应用` 技能。唯一写入动作是 `/usr/bin/open` 启动允许应用，返回结果明确标为“窗口未验证”。不允许任意 shell、参数透传、键盘/指针注入、屏幕录制或文件写入。
+「Mac 操作」页可配置应用与目录允许范围。`mac_execute` 只有在至少一个允许应用存在时才能开启；开启后仍需要安装并限时授权 `Mac 启动允许应用` 技能，返回结果明确标为“窗口未验证”。`mac_file_write` 与目录范围同时开启后，可逐次授权 `Mac 创建允许文件`，仅在允许目录内创建 `0600` 新文件，不覆盖已有文件，并回读字节与 SHA-256。系统仍不允许任意 shell、参数透传、键盘/指针注入、屏幕录制、文件追加/覆盖/删除。
 
 管理网页已是可安装 PWA。iPhone 本地用 Safari 连接可信 HTTPS 地址后，可通过“添加到主屏幕”使用大标题、底部标签栏、44pt 控件、毛玻璃和安全区布局。Service Worker 只缓存静态外壳，不缓存 `/v2/` API 数据。
 
@@ -150,7 +150,7 @@ python scripts/export_contract.py
 python scripts/acceptance_ollama.py
 ```
 
-P1 基线 **62 项回归通过**；加入常驻服务、同步、语音、OCR、语义检索、原生操作、P3–P5 缺漏修复、自主执行账本、来源版本刷新、周期检查、PostgreSQL 单一库、备份恢复演练、扫描 PDF、云费用预算与模型草稿后，在 PostgreSQL 16 上 **141 项全部通过，0 skipped**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
+P1 基线 **62 项回归通过**；加入常驻服务、同步、语音、OCR、语义检索、原生操作、P3–P5 缺漏修复、自主执行账本、来源版本刷新、周期检查、PostgreSQL 单一库、备份恢复演练、扫描 PDF、云费用预算、模型草稿与受控文件创建后，在 PostgreSQL 16 上 **142 项全部通过，0 skipped**。真实浏览器和本机 Ollama 闭环分别保留在报告中：
 
 - [P1 实施与验证记录](docs/implementation/P1-模型与记忆闭环.md)
 - [Ollama 实测结果](docs/implementation/p1-ollama-acceptance.json)
@@ -192,7 +192,7 @@ GitHub Actions 已配置。前次云端 runner 受账号账单/支出限制，�
 server/fairy/        领域服务、记忆/学习、模型、技能、Mac 桥、自主预算、进化实验、API、worker
 apps/web/            管理端、iPhone PWA、记忆/学习/技能/Mac/自主页面和 SSE
 apps/ios/FairyApp/   macOS/iOS SwiftUI Package、Keychain、真实 API 页面
-apps/mac-bridge/     只读 Mac 桥与受限应用启动边界
+apps/mac-bridge/     只读 Mac helper、受限应用启动与受控文件创建边界
 contracts/           从代码生成的实际 OpenAPI
 scripts/             契约导出、隔离的真实模型/浏览器验收
 tests/              自动回归
