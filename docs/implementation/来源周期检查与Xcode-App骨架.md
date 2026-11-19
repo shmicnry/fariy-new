@@ -53,7 +53,6 @@ xcodebuild -project FairyApp.xcodeproj -scheme FairyApp \
 ## 验证
 
 - PostgreSQL 16：**135 passed，0 skipped**；
-- SQLite：**134 passed，1 skipped**，跳过专用 PostgreSQL 并发用例；
 - 内容变化、未变化、失败退避和每日预算均有回归；
 - 真实 Chromium：来源计划 UI、配置保留、自主账本、表单保稿和 P3–P5 通过；
 - 34 个桌面/390px iPhone/深色页面状态无未命名或过小控件、截断、溢出和运行错误；
