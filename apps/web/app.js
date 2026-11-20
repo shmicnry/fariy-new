@@ -840,7 +840,7 @@ async function renderRoute(route, ui) {
             });
             await render()
         }));
-        p.append(el('p', 'Mac 桌宠宿主尚未接入。此配置不会触发采集或操作。', 'muted'))
+        p.append(el('p', '桌宠在 macOS 原生 Fairy 中显示；此偏好同步到菜单栏和桌面悬浮面板。Web 管理端不渲染桌宠，也不会触发采集或操作。', 'muted'))
     } else if (route === 'flows') {
         const p = panel('真实事件轨迹');
         records(p, await api('events'));

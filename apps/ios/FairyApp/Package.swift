@@ -13,6 +13,7 @@ let package = Package(
                 .linkedFramework("UserNotifications"),
                 .linkedFramework("AVFoundation"),
             ]
-        )
+        ),
+        .testTarget(name: "FairyAppTests", dependencies: ["FairyApp"]),
     ]
 )

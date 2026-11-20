@@ -5,6 +5,8 @@ This package is the native implementation starting point shared by macOS and iOS
 ## Current screens
 
 - macOS: `NavigationSplitView` with grouped work, cognition and capability sections; settings stay in a fixed utility region.
+- macOS also includes a menu-bar Fairy host and an optional always-on-top draggable pet panel.
+- The pet panel reads real worker, memory, course, approval, skill and autonomy state; it does not fabricate activity.
 - iOS: five-tab `TabView`, large navigation titles, sheets, scrolling and success haptics.
 - Initial API hydration uses structure-matched skeleton cards and respects Reduce Motion.
 - New approvals use a one-shot symbol bounce; pending work uses progress instead of looping pulse.
@@ -49,6 +51,8 @@ README.
 ## Not yet included
 
 There is no selected Apple Developer Team, signed archive, APNs entitlement,
-microphone speech-recognition entitlement, Live2D/VRM host or real-device test
-suite. Local notification permission and TTS require execution on a signed
-device app. Un-signed Xcode builds do not imply App Store or TCC acceptance.
+microphone speech-recognition entitlement, Live2D/VRM avatar renderer or
+real-device test suite. The current macOS pet is a native state-aware panel, not
+a Live2D/VRM character. Local notification permission and TTS require execution
+on a signed device app. Un-signed Xcode builds do not imply App Store or TCC
+acceptance.

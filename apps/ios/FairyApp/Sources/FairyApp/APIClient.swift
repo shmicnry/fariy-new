@@ -57,6 +57,42 @@ struct SemanticSummary: Codable {
     let cloudUsed: Bool
 }
 
+struct FairyConfig: Codable {
+    var revision: Int
+    var dailyMinutes: Int
+    var petEnabled: Bool
+    var macExecute: Bool
+    var macFileWrite: Bool
+    var autonomousPaid: Bool
+    var macAllowedApps: [String]
+    var macAllowedPaths: [String]
+    var autonomyEnabled: Bool
+    var autonomyDailyMinutes: Int
+    var autonomyDailyItems: Int
+    var sourceRefreshEnabled: Bool
+    var sourceRefreshIntervalHours: Int
+    var sourceRefreshDailyLimit: Int
+    var sourceAllowedHosts: [String]
+
+    static let defaultValue = FairyConfig(
+        revision: 0,
+        dailyMinutes: 45,
+        petEnabled: false,
+        macExecute: false,
+        macFileWrite: false,
+        autonomousPaid: false,
+        macAllowedApps: [],
+        macAllowedPaths: [],
+        autonomyEnabled: false,
+        autonomyDailyMinutes: 30,
+        autonomyDailyItems: 10,
+        sourceRefreshEnabled: false,
+        sourceRefreshIntervalHours: 24,
+        sourceRefreshDailyLimit: 5,
+        sourceAllowedHosts: []
+    )
+}
+
 struct SkillItem: Codable, Identifiable {
     let id: String
     let revision: Int
@@ -200,6 +236,19 @@ actor FairyAPI {
 
     func semanticSummary() async throws -> SemanticSummary {
         return try decoder.decode(SemanticSummary.self, from: await request("semantic/status"))
+    }
+
+    func configs() async throws -> [FairyConfig] {
+        try decoder.decode([FairyConfig].self, from: await request("config"))
+    }
+
+    func updateConfig(_ config: FairyConfig) async throws -> FairyConfig {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        return try decoder.decode(
+            FairyConfig.self,
+            from: await request("config", method: "PUT", body: encoder.encode(config))
+        )
     }
 
     func correctMemory(id: String, revision: Int, text: String, reason: String) async throws -> MemoryItem {

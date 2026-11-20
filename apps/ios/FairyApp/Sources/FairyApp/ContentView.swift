@@ -1,6 +1,9 @@
 import SwiftUI
 import UserNotifications
 import AVFoundation
+#if os(macOS)
+import AppKit
+#endif
 
 @MainActor
 final class FairyModel: ObservableObject {
@@ -23,12 +26,16 @@ final class FairyModel: ObservableObject {
     @Published var isWorking = false
     @Published var isLoading = false
     @Published var hasLoaded = false
+    @Published var petEnabled = false
     @Published var showConnection = false
     @Published var lastError: String?
     private var api: FairyAPI?
     private var pollingTask: Task<Void, Never>?
     private var knownApprovalIDs: Set<String>?
-    private let notificationCenter = UNUserNotificationCenter.current()
+    private lazy var notificationCenter: UNUserNotificationCenter? = {
+        guard Bundle.main.bundleIdentifier != nil else { return nil }
+        return UNUserNotificationCenter.current()
+    }()
 
     func connect(baseURL: String, token: String) async {
         guard let url = URL(string: baseURL),
@@ -99,6 +106,9 @@ final class FairyModel: ObservableObject {
         if let value = try? await api.workerStatus() { workerStatus = value }
         if let value = try? await api.modelSummary() { modelSummary = value }
         if let value = try? await api.semanticSummary() { semanticSummary = value }
+        if let value = try? await api.configs().first {
+            petEnabled = value.petEnabled
+        }
     }
 
     func send(_ text: String) async {
@@ -243,6 +253,10 @@ final class FairyModel: ObservableObject {
     }
 
     func requestNotificationPermission() async {
+        guard let notificationCenter else {
+            notificationPermission = "当前运行方式不支持系统通知"
+            return
+        }
         do {
             let granted = try await notificationCenter.requestAuthorization(
                 options: [.alert, .badge, .sound]
@@ -258,7 +272,26 @@ final class FairyModel: ObservableObject {
         }
     }
 
+    func setPetEnabled(_ enabled: Bool) async {
+        guard let api else {
+            lastError = "尚未连接 Fairy 服务。"
+            return
+        }
+        do {
+            var config = try await api.configs().first ?? FairyConfig.defaultValue
+            config.petEnabled = enabled
+            let saved = try await api.updateConfig(config)
+            petEnabled = saved.petEnabled
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
     func refreshNotificationSettings() async {
+        guard let notificationCenter else {
+            notificationPermission = "当前运行方式不支持系统通知"
+            return
+        }
         let settings = await notificationCenter.notificationSettings()
         switch settings.authorizationStatus {
         case .authorized, .provisional:
@@ -285,6 +318,7 @@ final class FairyModel: ObservableObject {
         let newIDs = current.subtracting(previous)
         knownApprovalIDs = current
         guard !newIDs.isEmpty else { return }
+        guard let notificationCenter else { return }
         let settings = await notificationCenter.notificationSettings()
         guard [.authorized, .provisional].contains(settings.authorizationStatus) else {
             return
@@ -307,6 +341,9 @@ final class FairyModel: ObservableObject {
 
 struct ContentView: View {
     @EnvironmentObject private var model: FairyModel
+    #if os(macOS)
+    @EnvironmentObject private var petController: DesktopPetController
+    #endif
     @State private var tab = 0
     @State private var macSection: MacSection? = .conversation
 
@@ -376,6 +413,11 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: model.hasLoaded)
+        #if os(macOS)
+        .onChange(of: model.petEnabled) { _, enabled in
+            petController.setVisible(enabled, model: model)
+        }
+        #endif
         .task {
             await model.restoreConnection()
             await model.refreshNotificationSettings()
@@ -413,6 +455,285 @@ struct ContentView: View {
         }
     }
 }
+
+#if os(macOS)
+@MainActor
+final class DesktopPetController: ObservableObject {
+    @Published private(set) var isVisible = false
+    private var panel: NSPanel?
+
+    func setVisible(_ visible: Bool, model: FairyModel) {
+        Task { @MainActor in
+            if visible {
+                show(model: model)
+            } else {
+                hide()
+            }
+        }
+    }
+
+    private func show(model: FairyModel) {
+        if let panel {
+            panel.orderFrontRegardless()
+            isVisible = true
+            return
+        }
+        let frame = NSScreen.main?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let content = MacDesktopPetView()
+            .environmentObject(model)
+            .environmentObject(self)
+        let surface = FairyPetPanel(
+            contentRect: NSRect(
+                x: frame.maxX - 244,
+                y: frame.maxY - 296,
+                width: 220,
+                height: 270
+            ),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        surface.isOpaque = false
+        surface.backgroundColor = .clear
+        surface.hasShadow = true
+        surface.level = .floating
+        surface.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        surface.isMovableByWindowBackground = true
+        surface.becomesKeyOnlyIfNeeded = true
+        surface.hidesOnDeactivate = false
+        surface.isReleasedWhenClosed = false
+        surface.contentView = NSHostingView(rootView: content)
+        surface.orderFrontRegardless()
+        panel = surface
+        isVisible = true
+    }
+
+    func hide() {
+        panel?.orderOut(nil)
+        isVisible = false
+    }
+}
+
+private final class FairyPetPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
+private struct PetVisualState {
+    let title: String
+    let color: Color
+    let symbol: String
+}
+
+@MainActor
+private func petVisualState(for model: FairyModel) -> PetVisualState {
+    let pending = model.approvals.filter { $0.decision == nil }.count
+    if model.isWorking {
+        return PetVisualState(title: "正在处理", color: .orange, symbol: "ellipsis")
+    }
+    if pending > 0 {
+        return PetVisualState(
+            title: "\(pending) 项等你确认",
+            color: .orange,
+            symbol: "hand.raised.fill"
+        )
+    }
+    if model.workerStatus?.alive == true {
+        return PetVisualState(title: "后台运行", color: .green, symbol: "waveform.path.ecg")
+    }
+    return PetVisualState(
+        title: model.status,
+        color: model.status == "已连接本机 Fairy" ? .blue : .secondary,
+        symbol: "circle.dashed"
+    )
+}
+
+private struct FairyPetFace: View {
+    let state: PetVisualState
+    let compact: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var breathe = false
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: compact ? 18 : 32, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [state.color.opacity(0.26), .white.opacity(0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: compact ? 18 : 32, style: .continuous)
+                        .stroke(state.color.opacity(0.28), lineWidth: 1)
+                }
+            VStack(spacing: compact ? 6 : 10) {
+                HStack(spacing: compact ? 16 : 24) {
+                    Circle().fill(.primary).frame(width: compact ? 5 : 7, height: compact ? 5 : 7)
+                    Circle().fill(.primary).frame(width: compact ? 5 : 7, height: compact ? 5 : 7)
+                }
+                Capsule()
+                    .fill(.primary.opacity(0.7))
+                    .frame(width: compact ? 13 : 17, height: 3)
+            }
+        }
+        .frame(width: compact ? 64 : 112, height: compact ? 64 : 112)
+        .scaleEffect(reduceMotion || !breathe ? 1 : 1.018)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                breathe = true
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct MacDesktopPetView: View {
+    @EnvironmentObject private var model: FairyModel
+    @EnvironmentObject private var controller: DesktopPetController
+    @Environment(\.openWindow) private var openWindow
+
+    private var state: PetVisualState { petVisualState(for: model) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Fairy")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Button {
+                    Task { await model.setPetEnabled(false) }
+                } label: {
+                    Image(systemName: "xmark")
+                        .frame(width: 26, height: 26)
+                }
+                .buttonStyle(.plain)
+                .background(.thinMaterial, in: Circle())
+                .accessibilityLabel("隐藏 Fairy 桌宠")
+            }
+            HStack(spacing: 15) {
+                FairyPetFace(state: state, compact: false)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(state.title)
+                        .font(.callout.weight(.semibold))
+                    Text("记忆 \(model.memories.count) · 课程 \(model.courses.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if !model.autonomyCandidates.isEmpty {
+                        Text("自主候选 \(model.autonomyCandidates.count)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            HStack {
+                Button {
+                    openWindow(id: "main")
+                    NSApp.activate(ignoringOtherApps: true)
+                } label: {
+                    Label("控制台", systemImage: "macwindow")
+                }
+                .buttonStyle(.borderedProminent)
+                Spacer()
+                Button {
+                    Task { await model.refreshAll() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.isWorking)
+                .accessibilityLabel("刷新 Fairy 状态")
+            }
+        }
+        .padding(16)
+        .frame(width: 220, height: 270, alignment: .topLeading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
+        }
+        .padding(10)
+        .onExitCommand {
+            Task { await model.setPetEnabled(false) }
+        }
+    }
+}
+
+struct FairyMenuBarView: View {
+    @EnvironmentObject private var model: FairyModel
+    @EnvironmentObject private var petController: DesktopPetController
+    @Environment(\.openWindow) private var openWindow
+
+    private var state: PetVisualState { petVisualState(for: model) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                FairyPetFace(state: state, compact: true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Fairy")
+                        .font(.headline)
+                    Label(state.title, systemImage: state.symbol)
+                        .font(.caption)
+                        .foregroundStyle(state.color)
+                }
+            }
+            Divider()
+            HStack {
+                petMetric("待确认", model.approvals.filter { $0.decision == nil }.count)
+                petMetric("自主候选", model.autonomyCandidates.count)
+                petMetric("技能", model.skills.filter(\.enabled).count)
+            }
+            Toggle(
+                "在桌面显示桌宠",
+                isOn: Binding(
+                    get: { model.petEnabled },
+                    set: { value in
+                        Task { await model.setPetEnabled(value) }
+                    }
+                )
+            )
+            .toggleStyle(.switch)
+            .disabled(model.status != "已连接本机 Fairy")
+            HStack {
+                Button("打开控制台") {
+                    openWindow(id: "main")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+                .buttonStyle(.borderedProminent)
+                Spacer()
+                Button {
+                    Task { await model.refreshAll() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.isWorking || model.status != "已连接本机 Fairy")
+                .accessibilityLabel("刷新 Fairy 状态")
+            }
+        }
+        .padding(16)
+        .frame(width: 320)
+        .onChange(of: model.petEnabled) { _, enabled in
+            petController.setVisible(enabled, model: model)
+        }
+    }
+
+    private func petMetric(_ title: String, _ value: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(String(value))
+                .font(.title3.monospacedDigit().weight(.semibold))
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+#endif
 
 private struct FairyLoadingView: View {
     var body: some View {
@@ -1156,6 +1477,27 @@ struct SettingsView: View {
                     if let heartbeat = model.workerStatus?.heartbeatAt {
                         LabeledContent("最后心跳", value: heartbeat)
                     }
+                }
+                Section("桌宠") {
+                    Toggle(
+                        "显示 Fairy 桌面桌宠",
+                        isOn: Binding(
+                            get: { model.petEnabled },
+                            set: { enabled in
+                                Task { await model.setPetEnabled(enabled) }
+                            }
+                        )
+                    )
+                    .disabled(model.status != "已连接本机 Fairy")
+                    #if os(macOS)
+                    Text("桌宠是置顶、可拖动的原生面板；也可从菜单栏 Fairy 入口控制。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    #else
+                    Text("此偏好会同步到同一所有者连接的 macOS Fairy。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    #endif
                 }
                 Section("通知") {
                     LabeledContent("本地通知", value: model.notificationPermission)
