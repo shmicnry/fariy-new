@@ -248,6 +248,38 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     app.state.evolution = evolution
     app.state.voice = voice
     app.state.semantic = semantic
+
+    async def recall_memories(q):
+        """Semantic rerank over eligible memories; lexical recall remains the honest fallback."""
+        candidates = service.recall_candidates(q)
+        reranked = await semantic.rerank(
+            q, [{"id": c["id"], "text": c["text"]} for c in candidates]
+        )
+        if reranked is None:
+            return service.recall(q)
+        semantic_by_id = {
+            item["id"]: item["semantic_relevance"] for item in reranked
+        }
+        results = []
+        for c in candidates:
+            sem = semantic_by_id.get(c["id"])
+            if sem is None:
+                continue
+            blended = round(
+                c["lexical_relevance"] * 0.55 + max(0.0, sem - 0.35) * 0.45, 6
+            )
+            if c["lexical_relevance"] >= 0.25 or sem >= 0.68:
+                results.append(
+                    dict(c, relevance=blended, semantic_relevance=sem)
+                )
+        results.sort(key=lambda r: (-r["relevance"], r["id"]))
+        return {
+            "results": results[:12],
+            "reason": "matched" if results else "no_match_not_proof_of_absence",
+            "degraded": False,
+            "retrieval_mode": "ollama_semantic_rerank_with_local_character_fallback",
+            "semantic_available": True,
+        }
     app.state.worker_state_dir = os.getenv("FAIRY_STATE_DIR", "var")
     state_dir = Path(app.state.worker_state_dir).absolute()
     app.state.backup_dir = os.getenv(
@@ -379,7 +411,11 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "video": False,
             "automatic_mastery": False,
             "vector_search": True,
-            "vector_search_mode": "local_character_vector_hybrid",
+            "vector_search_mode": (
+                "ollama_semantic_rerank_with_local_character_fallback"
+                if semantic.configuration()["enabled"]
+                else "local_character_vector_hybrid"
+            ),
             "semantic_model": semantic.configuration()["model"],
             "wardrobe_rendering": False,
         }
@@ -414,7 +450,8 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
         if r.pop("_replayed", False) or r["status"] != "pending":
             with db.sessions() as s:
                 return view(service.get(s, r["id"]))
-        context, snapshot = service.model_context(body.text)
+        recalled = (await recall_memories(service.recall_query(body.text)))["results"]
+        context, snapshot = service.model_context(body.text, recalled=recalled)
         try:
             result = await router.answer(r, body.text, body.routing, context, snapshot)
         except asyncio.CancelledError:
@@ -441,8 +478,8 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
         return service.cancel(id)
 
     @api.get("/memories")
-    def memories(q: str = Query(default="", max_length=1000)):
-        return service.recall(q) if q else service.list("memory")
+    async def memories(q: str = Query(default="", max_length=1000)):
+        return await recall_memories(q) if q else service.list("memory")
 
     @api.post("/memories")
     def memory(body: Memory, k=Depends(key)):

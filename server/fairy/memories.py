@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from .service import Service, fail
@@ -59,14 +60,17 @@ class MemoryService(Service):
         p.payload = json.dumps(d)
         p.revision += 1
 
-    def model_context(self, query):
+    def recall_query(self, query):
+        return "喜欢 喝" if personal_question(query) == "owner" else query
+
+    def model_context(self, query, recalled=None):
         with self.db.sessions() as s:
             policy = self.policy(s)
             policy_id, policy_revision = policy.id, policy.revision
             suppressed = set(json.loads(policy.payload)["suppressed_source_ids"])
         target = personal_question(query)
         context, snapshot = super().model_context(
-            "喜欢 喝" if target == "owner" else query
+            self.recall_query(query), recalled=recalled
         )
         context["entries"] = [
             entry
@@ -375,6 +379,18 @@ class MemoryService(Service):
                 self.resolve_cached(s, json.loads(cached.result))
             )
 
+    def _purge_embeddings(self, s, texts):
+        # Derived vectors of removed text must not survive as a hidden copy.
+        hashes = {
+            hashlib.sha256(t.encode("utf-8")).hexdigest() for t in texts if t
+        }
+        if not hashes:
+            return
+        for row in self.rows(s, "embedding_cache"):
+            key = json.loads(row.payload).get("key", "")
+            if key.rsplit(":", 1)[-1] in hashes:
+                s.delete(row)
+
     def correct(self, id, revision, text, reason, key, subject=None):
         if not text.strip() or not reason.strip():
             fail(422, "correction_and_reason_required")
@@ -398,6 +414,7 @@ class MemoryService(Service):
                 subject is None or subject == d.get("subject", infer_subject(text))
             ):
                 fail(422, "correction_unchanged")
+            previous_text = d["text"]
             previous = self._snapshot_revision(s, r)
             prev = json.loads(previous.payload)
             prev["valid_to"] = now()
@@ -423,6 +440,7 @@ class MemoryService(Service):
                 valid_from=now(),
                 change_reason=reason,
             )
+            self._purge_embeddings(s, [previous_text])
             r.payload = json.dumps(d)
             r.revision += 1
             self._snapshot_revision(s, r)
@@ -469,6 +487,11 @@ class MemoryService(Service):
                     for v in self.rows(s, "memory_revision")
                     if json.loads(v.payload).get("memory_id") == id
                 ]
+                self._purge_embeddings(
+                    s,
+                    [json.loads(r.payload).get("text")]
+                    + [json.loads(v.payload).get("text") for v in versions],
+                )
                 suppress |= set(json.loads(r.payload).get("source_ids", []))
                 for v in versions:
                     suppress |= set(json.loads(v.payload).get("source_ids", []))

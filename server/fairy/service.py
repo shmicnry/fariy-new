@@ -127,24 +127,36 @@ class Service:
             # Malformed retention metadata must fail closed instead of breaking every read path.
             return False
 
+    def _memory_candidates(self, s, query):
+        items = []
+        for r in self.rows(s, "memory"):
+            if r.status != "active":
+                continue
+            data = json.loads(r.payload)
+            refs = [s.get(Record, id) for id in data["source_ids"]]
+            if not refs or any(
+                not x or x.scope != "owner" or not self.source_eligible(x)
+                for x in refs
+            ):
+                continue
+            items.append((r, relevance(query, data["text"])))
+        return items
+
+    def recall_candidates(self, query, limit=200):
+        """Eligible active memories with lexical scores, newest capped, for semantic rerank."""
+        with self.db.sessions() as s:
+            items = self._memory_candidates(s, query)
+        return [dict(view(r), lexical_relevance=score) for r, score in items[-limit:]]
+
     def recall(self, query, principal="confirmed"):
         if principal != "confirmed":
             return {"results": [], "reason": "private_recall_denied", "degraded": False}
         with self.db.sessions() as s:
-            items = []
-            for r in self.rows(s, "memory"):
-                if r.status != "active":
-                    continue
-                data = json.loads(r.payload)
-                refs = [s.get(Record, id) for id in data["source_ids"]]
-                if not refs or any(
-                    not x or x.scope != "owner" or not self.source_eligible(x)
-                    for x in refs
-                ):
-                    continue
-                score = relevance(query, data["text"])
-                if score >= 0.25:
-                    items.append((r, score))
+            items = [
+                (r, score)
+                for r, score in self._memory_candidates(s, query)
+                if score >= 0.25
+            ]
             items.sort(key=lambda x: (-x[1], x[0].id))
             ranked = rrf([r.id for r, _ in items[:60]])
             byid = {r.id: (r, score) for r, score in items}
@@ -157,9 +169,10 @@ class Service:
                 "retrieval_mode": "local_character_vector_hybrid",
             }
 
-    def model_context(self, query):
+    def model_context(self, query, recalled=None):
         """Whole entries, bounded by characters; snapshot fences writes after source changes."""
-        recalled = self.recall(query)["results"]
+        if recalled is None:
+            recalled = self.recall(query)["results"]
         with self.db.sessions() as s:
             entries, snapshot, used, omitted = [], {}, 0, 0
             candidates = []
