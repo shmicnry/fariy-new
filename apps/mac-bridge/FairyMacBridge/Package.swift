@@ -6,15 +6,24 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [.executable(name: "FairyMacBridge", targets: ["FairyMacBridge"])],
     targets: [
-        .executableTarget(
-            name: "FairyMacBridge",
+        .target(
+            name: "FairyMacBridgeCore",
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),
+                .linkedFramework("CoreText"),
                 .linkedFramework("ImageIO"),
                 .linkedFramework("PDFKit"),
                 .linkedFramework("Vision"),
             ]
-        )
+        ),
+        .executableTarget(
+            name: "FairyMacBridge",
+            dependencies: ["FairyMacBridgeCore"]
+        ),
+        .testTarget(
+            name: "FairyMacBridgeCoreTests",
+            dependencies: ["FairyMacBridgeCore"]
+        ),
     ]
 )
