@@ -405,7 +405,7 @@ struct ContentView: View {
             }
             #endif
         }
-        .tint(Color(red: 0.14, green: 0.37, blue: 0.47))
+        .tint(Color(red: 0.145, green: 0.388, blue: 0.922))
         .overlay {
             if model.isLoading && !model.hasLoaded {
                 FairyLoadingView()
