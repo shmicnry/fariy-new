@@ -233,6 +233,43 @@ def refresh_due_source(db, autonomy, collector=fetch_text):
     return result
 
 
+def dispatch_due_reminders(db):
+    """Fire reminder/anniversary cards once at their due time, independent of study budget."""
+    service = Service(db)
+    current = datetime.now(timezone.utc)
+    fired = []
+    with db.tx() as session:
+        for row in service.rows(session, "card"):
+            if row.status != "active":
+                continue
+            data = json.loads(row.payload)
+            if data.get("subtype") not in ("reminder", "anniversary"):
+                continue
+            remind_at = data.get("remind_at")
+            if not remind_at or data.get("reminded_at"):
+                continue
+            try:
+                due = datetime.fromisoformat(remind_at)
+            except (TypeError, ValueError):
+                continue
+            if due.tzinfo is None or due > current:
+                continue
+            data["reminded_at"] = current.isoformat()
+            row.payload = json.dumps(data, ensure_ascii=False)
+            db.emit(
+                session,
+                "owner",
+                "card.reminder_due",
+                {
+                    "id": row.id,
+                    "title": data.get("title", ""),
+                    "remind_at": remind_at,
+                },
+            )
+            fired.append(row.id)
+    return fired
+
+
 def tick(db):
     service = Service(db)
     with db.tx() as s:
@@ -313,11 +350,13 @@ def run_cycle(db, autonomy, state_dir, started_at, cycle):
     error = None
     try:
         tick_ok = tick(db)
+        reminders = dispatch_due_reminders(db)
         source_result = refresh_due_source(db, autonomy)
         stopped = autonomy.enforce_budget()
         created = autonomy.refresh()
         summary = {
             "tick_processed": tick_ok,
+            "reminders_dispatched": len(reminders),
             "autonomy_candidates_created": len(created),
             "autonomy_goals_stopped": len(stopped),
             "source_refresh_status": (
@@ -327,6 +366,7 @@ def run_cycle(db, autonomy, state_dir, started_at, cycle):
     except Exception as exc:
         summary = {
             "tick_processed": False,
+            "reminders_dispatched": 0,
             "autonomy_candidates_created": 0,
             "autonomy_goals_stopped": 0,
             "source_refresh_status": None,

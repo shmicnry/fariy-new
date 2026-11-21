@@ -281,6 +281,9 @@ function loadNotifications() {
 }
 let notifications = loadNotifications();
 function eventMeta(event) {
+    if (event.type === 'card.reminder_due') {
+        return {text: `提醒：${event.payload?.title || '卡片'}`, routes: ['cards'], notify: true};
+    }
     const match = notificationRoutes.find(([pattern]) => pattern.test(event.type || ''));
     if (!match) return null;
     return {text: match[1], routes: match[2], notify: match[3] !== false && Boolean(match[1])};
@@ -300,7 +303,7 @@ function saveNotifications() {
     renderedUnread = unread;
 }
 function addNotification(event, meta) {
-    const id = String(event.seq || event.id || crypto.randomUUID());
+    const id = String(event.id || event.seq || crypto.randomUUID());
     if (notifications.some(item => item.id === id)) return;
     notifications.unshift({
         id,
@@ -395,7 +398,7 @@ function scheduleReminders(cards) {
         if (!card.remind_at) continue;
         const at = Date.parse(card.remind_at);
         if (!Number.isFinite(at) || at <= Date.now()) continue;
-        const key = `${card.id}:${card.revision}:${card.remind_at}`;
+        const key = `${card.id}:${card.remind_at}`;
         active.add(key);
         if (reminderTimers.has(key)) continue;
         const delay = Math.min(at - Date.now(), 2_147_000_000);
@@ -906,6 +909,9 @@ $('login').onsubmit = e => {
         localStorage.setItem(eventCursorKey, String(initialCursor));
         stopEvents = watchEvents(() => token, event => {
             localStorage.setItem(eventCursorKey, String(event.seq || initialCursor));
+            if (event.type === 'card.reminder_due' && event.payload?.id) {
+                event.id = `reminder:${event.payload.id}:${event.payload.remind_at}`;
+            }
             const meta = eventMeta(event);
             if (meta?.notify) addNotification(event, meta);
             if (conversation) {
