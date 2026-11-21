@@ -354,6 +354,13 @@ class SkillService(Service):
             else:
                 fail(409, "skill_implementation_not_available")
             with self.db.tx() as session:
+                # Re-validate the grant at completion: expiry or revocation
+                # during execution must withhold the result.
+                fresh_grant = self.get(session, grant.id, "skill_grant")
+                if fresh_grant.status != "active" or datetime.fromisoformat(
+                    json.loads(fresh_grant.payload)["expires_at"]
+                ) <= datetime.now(timezone.utc):
+                    fail(409, "skill_grant_expired")
                 invocation = self.get(session, invocation_id, "skill_invocation")
                 invocation.status = "completed"
                 invocation.revision += 1

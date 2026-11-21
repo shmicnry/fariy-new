@@ -90,6 +90,8 @@ def restore_database(source, database_url, expected_sha256):
             tool("pg_restore"),
             "--no-owner",
             "--no-acl",
+            "--clean",
+            "--if-exists",
             "--exit-on-error",
             "--dbname",
             native_url(database_url),
@@ -195,11 +197,16 @@ def write_status(directory, payload):
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(target.name + f".{os.getpid()}.tmp")
     encoded = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
-    descriptor = os.open(
-        temporary,
-        os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-        0o600,
+    flags = (
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     )
+    try:
+        descriptor = os.open(temporary, flags, 0o600)
+    except FileExistsError:
+        # A stale or planted temp file (possibly a symlink) is removed by name,
+        # never followed, then recreated exclusively once.
+        temporary.unlink(missing_ok=True)
+        descriptor = os.open(temporary, flags, 0o600)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             handle.write(encoded)

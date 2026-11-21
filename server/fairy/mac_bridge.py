@@ -292,7 +292,14 @@ class MacBridge:
         except OSError:
             fail(403, "parent_directory_not_writable")
 
-        created = False
+        def remove_created():
+            # Unlink relative to the pinned directory fd so a swapped parent
+            # cannot redirect cleanup at another file.
+            try:
+                os.unlink(target.name, dir_fd=directory_fd)
+            except OSError:
+                pass
+
         try:
             flags = (
                 os.O_WRONLY
@@ -311,38 +318,32 @@ class MacBridge:
                 fail(409, "file_already_exists")
             except OSError:
                 fail(403, "file_not_writable")
-            created = True
             try:
                 with os.fdopen(file_fd, "wb") as handle:
                     handle.write(payload)
                     handle.flush()
                     os.fsync(handle.fileno())
             except OSError:
-                try:
-                    os.unlink(target.name, dir_fd=directory_fd)
-                except OSError:
-                    pass
+                remove_created()
                 fail(503, "file_write_failed")
+            try:
+                read_fd = os.open(
+                    target.name,
+                    os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=directory_fd,
+                )
+                with os.fdopen(read_fd, "rb") as handle:
+                    written = handle.read(len(payload) + 1)
+            except OSError:
+                remove_created()
+                fail(503, "file_verification_failed")
+            digest = hashlib.sha256(written).hexdigest()
+            expected = hashlib.sha256(payload).hexdigest()
+            if written != payload or digest != expected:
+                remove_created()
+                fail(503, "file_verification_failed")
         finally:
             os.close(directory_fd)
-
-        try:
-            written = resolved.read_bytes()
-        except OSError:
-            if created:
-                try:
-                    resolved.unlink()
-                except OSError:
-                    pass
-            fail(503, "file_verification_failed")
-        digest = hashlib.sha256(written).hexdigest()
-        expected = hashlib.sha256(payload).hexdigest()
-        if written != payload or digest != expected:
-            try:
-                resolved.unlink()
-            except OSError:
-                pass
-            fail(503, "file_verification_failed")
         return {
             "path": str(resolved),
             "bytes": len(written),

@@ -3,16 +3,53 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
+import socket
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Literal
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from sqlalchemy import Integer, case, cast, func, select
+from sqlalchemy.dialects.postgresql import JSON
 
 from .store import Record, now
 from .identity import ground_personal_answer
+
+
+def public_cloud_address(url):
+    """Resolve the cloud endpoint and refuse any non-public destination (anti-rebinding)."""
+    parts = urlsplit(url)
+    try:
+        infos = socket.getaddrinfo(
+            parts.hostname, parts.port or 443, type=socket.SOCK_STREAM
+        )
+    except socket.gaierror:
+        raise ModelError("cloud_unavailable")
+    addresses = sorted({info[4][0] for info in infos})
+    if not addresses:
+        raise ModelError("cloud_unavailable")
+    for address in addresses:
+        try:
+            if not ipaddress.ip_address(address).is_global:
+                raise ModelError("cloud_destination_denied")
+        except ValueError:
+            raise ModelError("cloud_destination_denied")
+    return addresses[0]
+
+
+def pinned_request(url, address):
+    """Rewrite the URL to the vetted IP while preserving Host and TLS SNI."""
+    parts = urlsplit(url)
+    host = parts.netloc
+    netloc = f"[{address}]" if ":" in address else address
+    if parts.port:
+        netloc += f":{parts.port}"
+    pinned = urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    return pinned, {"Host": host}, parts.hostname
 
 
 class Candidate(BaseModel):
@@ -101,8 +138,14 @@ class ModelRouter:
     def recover_stale(self):
         return recover_stale_invocations(self.db, self.service)
 
-    async def _json(self, url, timeout, body=None, headers=None):
+    async def _json(self, url, timeout, body=None, headers=None, pin_public=False):
         async def send():
+            request_url, request_headers, extensions = url, headers, None
+            if pin_public and self.transport is None:
+                address = await asyncio.to_thread(public_cloud_address, url)
+                request_url, host_header, hostname = pinned_request(url, address)
+                request_headers = {**(headers or {}), **host_header}
+                extensions = {"sni_hostname": hostname}
             async with httpx.AsyncClient(
                 timeout=timeout,
                 transport=self.transport,
@@ -110,7 +153,11 @@ class ModelRouter:
                 trust_env=False,
             ) as client:
                 async with client.stream(
-                    "GET" if body is None else "POST", url, json=body, headers=headers
+                    "GET" if body is None else "POST",
+                    request_url,
+                    json=body,
+                    headers=request_headers,
+                    extensions=extensions,
                 ) as response:
                     if response.status_code >= 400:
                         raise ModelError("provider_http_error")
@@ -166,24 +213,37 @@ class ModelRouter:
 
     def _cloud_usage(self, session):
         today = datetime.now(timezone.utc).date().isoformat()
-        invocations = [
-            json.loads(row.payload)
-            for row in self.service.rows(session, "model_invocation")
-            if row.created_at.startswith(today)
-            and json.loads(row.payload).get("phase") == "cloud"
-        ]
-        used = 0
-        for data in invocations:
-            if data.get("charge_status") == "settled":
-                used += max(0, int(data.get("cost_microcents", 0)))
-            else:
-                used += max(0, int(data.get("reserved_microcents", 0)))
-        return {
-            "used_microcents": used,
-            "requests": len(invocations),
-            "unknown_charges": sum(
-                data.get("charge_status") == "unknown" for data in invocations
+        payload = cast(Record.payload, JSON)
+        charge_status = payload["charge_status"].astext
+        amount = case(
+            (
+                charge_status == "settled",
+                func.greatest(
+                    0, cast(payload["cost_microcents"].astext, Integer)
+                ),
             ),
+            else_=func.greatest(
+                0, cast(payload["reserved_microcents"].astext, Integer)
+            ),
+        )
+        requests, used, unknown = session.execute(
+            select(
+                func.count(),
+                func.coalesce(func.sum(amount), 0),
+                func.coalesce(
+                    func.sum(case((charge_status == "unknown", 1), else_=0)), 0
+                ),
+            ).where(
+                Record.scope == "owner",
+                Record.kind == "model_invocation",
+                Record.created_at.startswith(today),
+                payload["phase"].astext == "cloud",
+            )
+        ).one()
+        return {
+            "used_microcents": int(used),
+            "requests": int(requests),
+            "unknown_charges": int(unknown),
         }
 
     def cloud_budget(self):
@@ -514,6 +574,7 @@ class ModelRouter:
                     "stream": False,
                 },
                 {"Authorization": "Bearer " + key},
+                pin_public=True,
             )
             try:
                 choice = data["choices"][0]
