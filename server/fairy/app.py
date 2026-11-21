@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import json
+from datetime import datetime, timezone
 import os
 import secrets
 from pathlib import Path
@@ -8,7 +9,7 @@ from typing import Literal
 from fastapi import FastAPI, Depends, Header, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 from sqlalchemy import select
 from .store import Store, Event, now, view
 from .service import fail
@@ -132,6 +133,8 @@ class Config(Strict):
     revision: int = Field(ge=0)
     daily_minutes: int = Field(default=45, ge=0, le=240)
     pet_enabled: bool = False
+    pet_skin: Literal["builtin", "live2d", "vrm"] = "builtin"
+    pet_model_url: str = Field(default="", max_length=2000)
     mac_execute: bool = False
     mac_file_write: bool = False
     autonomous_paid: bool = False
@@ -195,6 +198,22 @@ class Config(Strict):
             if item not in cleaned:
                 cleaned.append(item)
         return cleaned
+
+    @field_validator("pet_model_url")
+    @classmethod
+    def valid_pet_model_url(cls, value):
+        value = value.strip()
+        if any(ord(character) < 32 or ord(character) == 127 for character in value):
+            raise ValueError("invalid_pet_model_url")
+        if value and not value.startswith("https://"):
+            raise ValueError("pet_model_url_must_be_https")
+        return value
+
+    @model_validator(mode="after")
+    def pet_skin_requires_model(self):
+        if self.pet_skin != "builtin" and not self.pet_model_url:
+            raise ValueError("pet_skin_requires_model_url")
+        return self
 
     @field_validator("source_allowed_hosts")
     @classmethod
@@ -908,6 +927,64 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     @api.get("/jobs")
     def jobs():
         return service.list("job")
+
+    @api.get("/pet/state")
+    def pet_state():
+        """Deterministic mood from persisted signals; every state is traceable (缘起)."""
+        with db.sessions() as session:
+            config = autonomy._config(session)
+            pending = []
+            for row in service.rows(session, "approval"):
+                data = json.loads(row.payload)
+                expires = data.get("expires_at")
+                if (
+                    data.get("decision") is None
+                    and expires
+                    and datetime.fromisoformat(expires) > datetime.now(timezone.utc)
+                ):
+                    pending.append(row)
+            goals = autonomy._goal_rows(session)
+            active = [g for g in goals if g.status == "active"]
+            done_today = [
+                g
+                for g in goals
+                if g.status == "completed"
+                and autonomy._is_today(json.loads(g.payload).get("completed_at"))
+            ]
+            budget = autonomy.budget(session)
+        signals = {
+            "pending_approvals": len(pending),
+            "active_goals": len(active),
+            "completed_today": len(done_today),
+            "autonomy_enabled": budget["enabled"],
+            "remaining_minutes": budget["remaining_minutes"],
+        }
+        if pending:
+            mood, label = "waiting", "等待确认"
+            reasons = [f"{len(pending)} 条站内操作正在等待你的确认"]
+        elif active:
+            mood, label = "busy", "专注工作"
+            reasons = [f"{len(active)} 个自主目标进行中"]
+        elif done_today:
+            mood, label = "fulfilled", "今日有成"
+            reasons = [f"今天完成了 {len(done_today)} 个自主目标"]
+        elif budget["enabled"] and budget["remaining_minutes"] <= 0:
+            mood, label = "resting", "预算休整"
+            reasons = ["今日自主预算已用尽，进入休整"]
+        else:
+            mood, label = "calm", "平静待机"
+            reasons = ["没有待确认操作或进行中的目标，处于待机"]
+        return {
+            "mood": mood,
+            "label": label,
+            "reasons": reasons,
+            "signals": signals,
+            "appearance": {
+                "skin": config.get("pet_skin", "builtin"),
+                "model_url": config.get("pet_model_url", ""),
+                "fallback": "builtin",
+            },
+        }
 
     @api.get("/worker/status")
     def worker_status():

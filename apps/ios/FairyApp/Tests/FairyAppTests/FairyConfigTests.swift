@@ -36,5 +36,32 @@ final class FairyConfigTests: XCTestCase {
         XCTAssertEqual(config.macAllowedPaths, ["/Users/example/Documents/Fairy"])
         XCTAssertTrue(config.autonomyEnabled)
         XCTAssertEqual(config.sourceAllowedHosts, ["example.com"])
+        // Older payloads without the new fields must decode to safe defaults.
+        XCTAssertFalse(config.autonomyTopicEnabled)
+        XCTAssertEqual(config.autonomyTopics, [])
+        XCTAssertEqual(config.petSkin, "builtin")
+        XCTAssertEqual(config.petModelUrl, "")
+    }
+
+    func testRoundTripPreservesTopicsAndAppearance() throws {
+        var config = FairyConfig.defaultValue
+        config.revision = 3
+        config.autonomyTopicEnabled = true
+        config.autonomyTopics = ["本地模型评测", "记忆整理"]
+        config.petSkin = "live2d"
+        config.petModelUrl = "https://example.com/fairy.model3.json"
+
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let decoded = try decoder.decode(FairyConfig.self, from: encoder.encode(config))
+
+        XCTAssertEqual(decoded.revision, 3)
+        XCTAssertTrue(decoded.autonomyTopicEnabled)
+        XCTAssertEqual(decoded.autonomyTopics, ["本地模型评测", "记忆整理"])
+        XCTAssertEqual(decoded.petSkin, "live2d")
+        XCTAssertEqual(decoded.petModelUrl, "https://example.com/fairy.model3.json")
     }
 }

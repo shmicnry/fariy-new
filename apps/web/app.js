@@ -828,11 +828,30 @@ async function renderRoute(route, ui) {
         mins.value = conf.daily_minutes;
         p.append(label);
         controlLabel('规划学习预算（分钟）', mins, p, '当前设为 0 可暂停队列。');
+        const skin = el('select');
+        for (const [value, text] of [
+                ['builtin', '内置呼吸脸'],
+                ['live2d', 'Live2D 模型'],
+                ['vrm', 'VRM 模型']
+            ]) {
+            const option = el('option', text);
+            option.value = value;
+            skin.append(option);
+        }
+        skin.value = conf.pet_skin || 'builtin';
+        controlLabel('桌宠外观', skin, p, 'Live2D / VRM 需要你自己的模型资源；缺失时回退内置形象。');
+        const modelUrl = el('input');
+        modelUrl.type = 'url';
+        modelUrl.placeholder = 'https://…（模型资源地址）';
+        modelUrl.value = conf.pet_model_url || '';
+        controlLabel('模型资源地址', modelUrl, p, '仅支持 https；内置形象无需填写。');
         p.append(button('保存版本', async () => {
             await api('config', 'PUT', {
                 revision: conf.revision,
                 daily_minutes: Number(mins.value),
                 pet_enabled: check.checked,
+                pet_skin: skin.value,
+                pet_model_url: modelUrl.value.trim(),
                 mac_execute: Boolean(conf.mac_execute),
                 mac_file_write: Boolean(conf.mac_file_write),
                 autonomous_paid: false,
@@ -850,7 +869,19 @@ async function renderRoute(route, ui) {
             });
             await render()
         }));
-        p.append(el('p', '桌宠在 macOS 原生 Fairy 中显示；此偏好同步到菜单栏和桌面悬浮面板。Web 管理端不渲染桌宠，也不会触发采集或操作。', 'muted'))
+        p.append(el('p', '桌宠在 macOS 原生 Fairy 中显示；此偏好同步到菜单栏和桌面悬浮面板。Web 管理端不渲染桌宠，也不会触发采集或操作。', 'muted'));
+        const state = panel('Fairy 当前状态');
+        const mood = await api('pet/state');
+        state.append(el('h3', mood.label));
+        for (const reason of mood.reasons) state.append(el('p', reason));
+        state.append(el('p',
+            `待确认 ${mood.signals.pending_approvals} · 进行中目标 ${mood.signals.active_goals} · 今日完成 ${mood.signals.completed_today} · 剩余预算 ${mood.signals.remaining_minutes} 分钟`,
+            'muted'));
+        state.append(el('p',
+            mood.appearance.skin === 'builtin'
+                ? '外观：内置呼吸脸'
+                : `外观：${mood.appearance.skin}（${mood.appearance.model_url}），资源缺失时回退内置形象`,
+            'muted'))
     } else if (route === 'flows') {
         const p = panel('真实事件轨迹');
         records(p, await api('events'));

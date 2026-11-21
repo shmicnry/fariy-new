@@ -63,6 +63,8 @@ export async function renderKnowledge(ui) {
                 revision: sourceConfig.revision,
                 daily_minutes: sourceConfig.daily_minutes ?? 45,
                 pet_enabled: sourceConfig.pet_enabled ?? false,
+                pet_skin: sourceConfig.pet_skin ?? 'builtin',
+                pet_model_url: sourceConfig.pet_model_url ?? '',
                 mac_execute: sourceConfig.mac_execute ?? false,
                 mac_file_write: sourceConfig.mac_file_write ?? false,
                 mac_allowed_apps: sourceConfig.mac_allowed_apps || [],

@@ -209,6 +209,8 @@ export async function renderMac(ui) {
             revision: config.revision,
             daily_minutes: config.daily_minutes,
             pet_enabled: config.pet_enabled,
+            pet_skin: config.pet_skin ?? 'builtin',
+            pet_model_url: config.pet_model_url ?? '',
             mac_allowed_apps: lines(appInput),
             mac_allowed_paths: lines(pathConfig),
             mac_execute: execute.checked,

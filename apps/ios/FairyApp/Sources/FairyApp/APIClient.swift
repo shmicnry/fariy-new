@@ -78,6 +78,10 @@ struct FairyConfig: Codable {
     var autonomyEnabled: Bool
     var autonomyDailyMinutes: Int
     var autonomyDailyItems: Int
+    var autonomyTopicEnabled: Bool
+    var autonomyTopics: [String]
+    var petSkin: String
+    var petModelUrl: String
     var sourceRefreshEnabled: Bool
     var sourceRefreshIntervalHours: Int
     var sourceRefreshDailyLimit: Int
@@ -95,11 +99,42 @@ struct FairyConfig: Codable {
         autonomyEnabled: false,
         autonomyDailyMinutes: 30,
         autonomyDailyItems: 10,
+        autonomyTopicEnabled: false,
+        autonomyTopics: [],
+        petSkin: "builtin",
+        petModelUrl: "",
         sourceRefreshEnabled: false,
         sourceRefreshIntervalHours: 24,
         sourceRefreshDailyLimit: 5,
         sourceAllowedHosts: []
     )
+}
+
+extension FairyConfig {
+    // Tolerate older payloads that predate topic/appearance fields so a
+    // read-modify-write PUT never silently resets them to defaults.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        revision = try c.decode(Int.self, forKey: .revision)
+        dailyMinutes = try c.decode(Int.self, forKey: .dailyMinutes)
+        petEnabled = try c.decode(Bool.self, forKey: .petEnabled)
+        macExecute = try c.decode(Bool.self, forKey: .macExecute)
+        macFileWrite = try c.decode(Bool.self, forKey: .macFileWrite)
+        autonomousPaid = try c.decode(Bool.self, forKey: .autonomousPaid)
+        macAllowedApps = try c.decode([String].self, forKey: .macAllowedApps)
+        macAllowedPaths = try c.decode([String].self, forKey: .macAllowedPaths)
+        autonomyEnabled = try c.decode(Bool.self, forKey: .autonomyEnabled)
+        autonomyDailyMinutes = try c.decode(Int.self, forKey: .autonomyDailyMinutes)
+        autonomyDailyItems = try c.decode(Int.self, forKey: .autonomyDailyItems)
+        autonomyTopicEnabled = try c.decodeIfPresent(Bool.self, forKey: .autonomyTopicEnabled) ?? false
+        autonomyTopics = try c.decodeIfPresent([String].self, forKey: .autonomyTopics) ?? []
+        petSkin = try c.decodeIfPresent(String.self, forKey: .petSkin) ?? "builtin"
+        petModelUrl = try c.decodeIfPresent(String.self, forKey: .petModelUrl) ?? ""
+        sourceRefreshEnabled = try c.decode(Bool.self, forKey: .sourceRefreshEnabled)
+        sourceRefreshIntervalHours = try c.decode(Int.self, forKey: .sourceRefreshIntervalHours)
+        sourceRefreshDailyLimit = try c.decode(Int.self, forKey: .sourceRefreshDailyLimit)
+        sourceAllowedHosts = try c.decode([String].self, forKey: .sourceAllowedHosts)
+    }
 }
 
 struct SkillItem: Codable, Identifiable {

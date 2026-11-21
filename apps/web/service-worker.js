@@ -1,4 +1,4 @@
-const CACHE = 'fairy-shell-v25';
+const CACHE = 'fairy-shell-v26';
 const SHELL = [
   '/',
   '/assets/style.css',
