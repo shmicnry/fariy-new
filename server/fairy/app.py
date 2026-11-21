@@ -13,6 +13,7 @@ from sqlalchemy import select
 from .store import Store, Event, now, view
 from .service import fail
 from .memories import MemoryService
+from .devices import DeviceService
 from .model_settings import ModelSettings, ModelConfig
 from .models import ModelRouter
 from .learning import LearningService
@@ -221,6 +222,10 @@ class Choice(Strict):
     choice: Literal["allow_once", "reject"]
 
 
+class DevicePair(Strict):
+    name: str = Field(min_length=1, max_length=64)
+
+
 def create_app(url=None, token=None, transport=None, secrets_dir=None):
     Path("var").mkdir(exist_ok=True)
     database_url = url or os.getenv("FAIRY_DATABASE_URL")
@@ -228,6 +233,7 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
         raise RuntimeError("database_url_required")
     db = Store(database_url)
     service = MemoryService(db)
+    devices = DeviceService(db, service)
     model_settings = ModelSettings(db, secrets_dir=secrets_dir)
     router = ModelRouter(service, model_settings, transport=transport)
     semantic = SemanticService(db, model_settings, transport=transport)
@@ -240,6 +246,7 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     app = FastAPI(title="Fairy Core", version="0.3.0")
     app.state.db = db
     app.state.service = service
+    app.state.devices = devices
     app.state.model_settings = model_settings
     app.state.router = router
     app.state.skills = skill_service
@@ -336,11 +343,15 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     async def auth(authorization: str = Header(default="")):
         if not secret:
             fail(503, "server_token_not_configured")
-        if not secrets.compare_digest(
+        if secrets.compare_digest(
             authorization.encode(), ("Bearer " + secret).encode()
         ):
-            fail(401, "unauthorized")
-        return "owner"
+            return {"principal": "owner", "device_id": None}
+        if authorization.startswith("Bearer fd_"):
+            device_id = devices.authenticate(authorization[7:])
+            if device_id:
+                return {"principal": "device", "device_id": device_id}
+        fail(401, "unauthorized")
 
     async def key(idempotency_key: str = Header(min_length=1, max_length=128)):
         return idempotency_key
@@ -367,6 +378,8 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "primary_provider": "ollama",
             "cloud_fallback_configured": model_settings.public()["cloud_ready"],
             "reviewed_memory": True,
+            "device_pairing": True,
+            "device_revocation": True,
             "memory_corrections": True,
             "text_materials": True,
             "document_formats": [
@@ -1008,6 +1021,28 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "projection_only": True,
         }
 
+    def owner_only(session):
+        if session["device_id"]:
+            fail(403, "master_token_required")
+
+    @api.get("/devices")
+    def device_list():
+        return devices.list()
+
+    @api.post("/devices")
+    def device_pair(
+        body: DevicePair,
+        k=Depends(key),
+        session=Depends(auth),
+    ):
+        owner_only(session)
+        return devices.pair(body.name, k)
+
+    @api.post("/devices/{device_id}/revoke")
+    def device_revoke(device_id: str, session=Depends(auth)):
+        owner_only(session)
+        return devices.revoke(device_id)
+
     @api.get("/events")
     def events(
         after: int = Query(default=0, ge=0),
@@ -1044,6 +1079,7 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     async def stream(
         after: int = Query(default=0, ge=0),
         last_event_id: str | None = Header(default=None),
+        session=Depends(auth),
     ):
         if last_event_id:
             try:
@@ -1054,6 +1090,9 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
         async def generate():
             cursor = after
             while True:
+                if session["device_id"] and not devices.active(session["device_id"]):
+                    yield 'event: device.revoked\ndata: {"type":"device.revoked"}\n\n'
+                    return
                 batch = events(cursor, 100)
                 for event in batch:
                     cursor = event["seq"]

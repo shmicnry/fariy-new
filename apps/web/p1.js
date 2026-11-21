@@ -670,6 +670,12 @@ export function watchEvents(getToken, onEvent, onConnection, initialCursor = 0) 
                         const data = frame.split('\n').find(x => x.startsWith('data: '));
                         if (data) {
                             const event = JSON.parse(data.slice(6));
+                            if (event.type === 'device.revoked') {
+                                onEvent(event);
+                                stopped = true;
+                                abort.abort();
+                                break
+                            }
                             if (event.seq > cursor) {
                                 cursor = event.seq;
                                 onEvent(event)
@@ -688,4 +694,57 @@ export function watchEvents(getToken, onEvent, onConnection, initialCursor = 0) 
         stopped = true;
         abort.abort()
     };
+}
+
+// Device tokens are shown exactly once at pairing; the service keeps only a hash.
+export async function renderDevices(ui) {
+    const paired = ui.panel('已配对设备');
+    const devices = await ui.api('devices');
+    if (!devices.length) paired.append(ui.el('p', '还没有配对任何设备。', 'muted'));
+    for (const d of devices) {
+        const row = ui.el('div', undefined, 'row');
+        row.append(ui.el('strong', d.name));
+        row.append(ui.el('p', (d.status === 'active' ? '可用' : '已吊销') + ' · 配对时间：' + new Date(d.created_at).toLocaleString(), 'muted'));
+        if (d.status === 'active') row.append(ui.confirmButton(
+            '吊销此设备',
+            '吊销「' + d.name + '」',
+            '吊销后该设备的令牌立即失效，正在进行的事件连接会在约 1 秒内断开。此操作不可撤销，需要重新配对才能恢复连接。',
+            async () => {
+                await ui.api('devices/' + encodeURIComponent(d.id) + '/revoke', 'POST', {});
+                await ui.refresh()
+            }
+        ));
+        paired.append(row)
+    }
+    const pair = ui.panel('配对新设备');
+    const name = field(ui, pair, '设备名称', '');
+    name.placeholder = '例如：办公室 iPhone';
+    name.maxLength = 64;
+    pair.append(ui.button('生成设备令牌', async () => {
+        const r = await ui.api('devices', 'POST', {name: name.value.trim()});
+        if (!r.token) {
+            const body = ui.el('div', undefined, 'confirm-content');
+            body.append(ui.el('p', '这次请求命中了重复提交保护，令牌不会再次显示。请重新点击生成。'));
+            ui.openDialog('令牌未重复显示', body, {variant: 'confirm', dismissOnBackdrop: false});
+            return
+        }
+        // The dialog lives outside the routed content, so the one-time token survives the list refresh.
+        const body = ui.el('div', undefined, 'confirm-content');
+        const tokenBox = ui.el('code', r.token, 'token-display');
+        const actions = ui.el('div', undefined, 'button-row dialog-actions');
+        actions.append(
+            ui.button('复制令牌', async () => {
+                await navigator.clipboard.writeText(r.token)
+            }, 'secondary'),
+            ui.button('我已保存，关闭', async () => ui.closeDialog(), 'secondary')
+        );
+        body.append(
+            ui.el('p', '令牌只显示这一次，服务端仅保存它的哈希。请立即复制并保存到「' + r.name + '」；关闭此窗口后无法再查看。'),
+            tokenBox,
+            actions
+        );
+        ui.openDialog('设备令牌（仅显示一次）', body, {dismissOnBackdrop: false});
+        name.value = '';
+        await ui.refresh()
+    }));
 }

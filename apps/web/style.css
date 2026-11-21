@@ -1995,3 +1995,17 @@ blockquote p:last-child,
         transition-duration: 0.01ms !important;
     }
 }
+
+.token-display {
+    display: block;
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    background: var(--accent-soft);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    word-break: break-all;
+    user-select: all;
+}

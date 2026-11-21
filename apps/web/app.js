@@ -13,6 +13,7 @@ import {
 } from './p5.js';
 import {
     renderModels,
+    renderDevices,
     renderMemories,
     renderConversation,
     explain,
@@ -35,6 +36,7 @@ const names = {
     world: '世界与知识',
     memories: '记忆审阅',
     models: '模型与路由',
+    devices: '设备与连接',
     learning: '学习中心',
     assessments: '学习测验',
     evolution: '自主与进化',
@@ -53,7 +55,7 @@ const navGroups = [
     ['自主能力', ['evolution', 'flows', 'skills', 'mac']],
     ['个人空间', ['pet', 'cards', 'approvals']]
 ];
-const systemNavGroup = ['系统', ['models']];
+const systemNavGroup = ['系统', ['models', 'devices']];
 const mobilePrimaryRoutes = new Set(['overview', 'chat', 'memories', 'learning']);
 const iconPaths = {
     overview: ['M4 10.5 12 4l8 6.5V20h-6v-6h-4v6H4z'],
@@ -70,7 +72,8 @@ const iconPaths = {
     pet: ['M8 12.5c-1.8-3.4-4.5-2-3.7.9.5 1.7 2 2.7 3.7 3.2M16 12.5c1.8-3.4 4.5-2 3.7.9-.5 1.7-2 2.7-3.7 3.2M8 14.5c0-2 1.8-3.5 4-3.5s4 1.5 4 3.5c0 2.3-1.7 4-4 4s-4-1.7-4-4z'],
     cards: ['M5 6.5h14v11H5zM5 9.5h14'],
     approvals: ['M12 3.8 19 6v6c0 4.1-2.6 6.9-7 8.2-4.4-1.3-7-4.1-7-8.2V6zM9 12l2 2 4-4'],
-    models: ['M4 7h10M18 7h2M4 17h2M10 17h10M16 4.5v5M8 14.5v5']
+    models: ['M4 7h10M18 7h2M4 17h2M10 17h10M16 4.5v5M8 14.5v5'],
+    devices: ['M7 4.5h10v15H7zM10 17h4M4 8.5h3M4 12h3M17 8.5h3M17 12h3']
 };
 const $ = id => document.getElementById(id);
 const el = (tag, text, cls) => {
@@ -269,7 +272,8 @@ const notificationRoutes = [
     [/^evolution\./, '进化实验已更新', ['evolution', 'flows']],
     [/^approval\.|^note\./, '待确认操作已更新', ['approvals', 'cards', 'overview']],
     [/^card\./, '卡片已更新', ['cards']],
-    [/^model\.recovered/, '模型请求状态已恢复', ['chat', 'models', 'overview']]
+    [/^model\.recovered/, '模型请求状态已恢复', ['chat', 'models', 'overview']],
+    [/^device\./, '设备连接已更新', ['devices', 'overview']]
 ];
 function loadNotifications() {
     try {
@@ -539,6 +543,7 @@ async function renderRoute(route, ui) {
     if (route === 'world') return renderKnowledge(ui);
     if (route === 'assessments') return renderAssessments(ui);
     if (route === 'models') return renderModels(ui);
+    if (route === 'devices') return renderDevices(ui);
     if (route === 'memories') {
         const label = document.querySelector('#nav a[href="#memories"] span');
         if (label) label.textContent = names.memories;
