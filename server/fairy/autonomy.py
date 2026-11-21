@@ -143,45 +143,47 @@ class AutonomyService(Service):
         if used_seconds > int(data.get("autonomy_daily_minutes", 30)) * 60:
             fail(409, "autonomy_budget_below_committed_usage")
 
-    def budget(self):
-        with self.db.sessions() as session:
-            config = self._config(session)
-            day = self._today()
-            if not config.get("autonomy_enabled", False):
-                return {
-                    "enabled": False,
-                    "daily_minutes": config.get("autonomy_daily_minutes", 30),
-                    "used_minutes": 0,
-                    "used_seconds": 0,
-                    "reserved_seconds": 0,
-                    "remaining_minutes": 0,
-                    "remaining_seconds": 0,
-                    "daily_items": config.get("autonomy_daily_items", 10),
-                    "used_items": 0,
-                    "remaining_items": 0,
-                    "timezone": str(self._timezone()),
-                    "day": day.isoformat(),
-                }
-            used_seconds, reserved_seconds, accepted_count = self._usage(session)
-            daily_minutes = config.get("autonomy_daily_minutes", 30)
-            daily_items = config.get("autonomy_daily_items", 10)
-            daily_seconds = daily_minutes * 60
+    def budget(self, session=None):
+        if session is None:
+            with self.db.sessions() as owned:
+                return self.budget(owned)
+        config = self._config(session)
+        day = self._today()
+        if not config.get("autonomy_enabled", False):
             return {
-                "enabled": True,
-                "daily_minutes": daily_minutes,
-                "used_minutes": math.ceil(used_seconds / 60),
-                "used_seconds": used_seconds,
-                "reserved_seconds": reserved_seconds,
-                "remaining_minutes": max(
-                    0, math.ceil((daily_seconds - used_seconds) / 60)
-                ),
-                "remaining_seconds": max(0, daily_seconds - used_seconds),
-                "daily_items": daily_items,
-                "used_items": accepted_count,
-                "remaining_items": max(0, daily_items - accepted_count),
+                "enabled": False,
+                "daily_minutes": config.get("autonomy_daily_minutes", 30),
+                "used_minutes": 0,
+                "used_seconds": 0,
+                "reserved_seconds": 0,
+                "remaining_minutes": 0,
+                "remaining_seconds": 0,
+                "daily_items": config.get("autonomy_daily_items", 10),
+                "used_items": 0,
+                "remaining_items": 0,
                 "timezone": str(self._timezone()),
                 "day": day.isoformat(),
             }
+        used_seconds, reserved_seconds, accepted_count = self._usage(session)
+        daily_minutes = config.get("autonomy_daily_minutes", 30)
+        daily_items = config.get("autonomy_daily_items", 10)
+        daily_seconds = daily_minutes * 60
+        return {
+            "enabled": True,
+            "daily_minutes": daily_minutes,
+            "used_minutes": math.ceil(used_seconds / 60),
+            "used_seconds": used_seconds,
+            "reserved_seconds": reserved_seconds,
+            "remaining_minutes": max(
+                0, math.ceil((daily_seconds - used_seconds) / 60)
+            ),
+            "remaining_seconds": max(0, daily_seconds - used_seconds),
+            "daily_items": daily_items,
+            "used_items": accepted_count,
+            "remaining_items": max(0, daily_items - accepted_count),
+            "timezone": str(self._timezone()),
+            "day": day.isoformat(),
+        }
 
     def goals(self):
         with self.db.sessions() as session:
@@ -432,6 +434,41 @@ class AutonomyService(Service):
                     "autonomy.candidate_created",
                     {"id": candidate.id, "type": "world_conflict"},
                 )
+            # Owner-registered topics become candidates only when an explicit
+            # source allowlist exists, so autonomous study stays scoped.
+            config = self._config(session)
+            allowed_hosts = config.get("source_allowed_hosts", [])
+            if config.get("autonomy_topic_enabled") and allowed_hosts:
+                for topic in config.get("autonomy_topics", []):
+                    key = "topic:" + topic
+                    if key in existing:
+                        continue
+                    candidate = self.db.add(
+                        session,
+                        "owner",
+                        "autonomy_candidate",
+                        {
+                            "type": "topic",
+                            "status": "proposed",
+                            "dedupe_key": key,
+                            "title": "自主选题：" + topic,
+                            "reason": "所有者登记的主题，仅允许在允许的来源域名内学习",
+                            "question": "在允许域名内导入至少一个来源，并完成有原文依据的练习或主张",
+                            "estimated_minutes": 20,
+                            "source_ids": [],
+                            "origin": "owner_topic",
+                            "allowed_hosts": allowed_hosts,
+                            "success_condition": "在允许域名内导入来源并完成有原文依据的练习或主张，记录验证结果",
+                        },
+                    )
+                    existing.add(key)
+                    created.append(view(candidate))
+                    self.db.emit(
+                        session,
+                        "owner",
+                        "autonomy.candidate_created",
+                        {"id": candidate.id, "type": "topic"},
+                    )
         return created
 
     def accept(self, candidate_id, revision):
@@ -445,7 +482,7 @@ class AutonomyService(Service):
             config = self._config(session)
             if not config.get("autonomy_enabled", False):
                 fail(409, "autonomy_disabled")
-            budget = self.budget()
+            budget = self.budget(session)
             if (
                 data["estimated_minutes"] > budget["remaining_minutes"]
                 or budget["remaining_items"] <= 0
@@ -463,7 +500,10 @@ class AutonomyService(Service):
                     "candidate_id": candidate_id,
                     "title": data["title"],
                     "reason": data["reason"],
-                    "success_condition": "完成有来源的学习或冲突核对，并记录验证结果",
+                    "success_condition": data.get(
+                        "success_condition", "完成有来源的学习或冲突核对，并记录验证结果"
+                    ),
+                    "allowed_hosts": data.get("allowed_hosts", []),
                     "estimated_minutes": data["estimated_minutes"],
                     "reserved_minutes": data["estimated_minutes"],
                     "spent_seconds": 0,
@@ -478,7 +518,11 @@ class AutonomyService(Service):
                 "autonomy.candidate_accepted",
                 {"id": candidate_id, "goal_id": goal.id},
             )
-            return {"candidate": view(row), "goal": view(goal), "budget": self.budget()}
+            return {
+                "candidate": view(row),
+                "goal": view(goal),
+                "budget": self.budget(session),
+            }
 
     def dismiss(self, candidate_id, revision):
         with self.db.tx() as session:

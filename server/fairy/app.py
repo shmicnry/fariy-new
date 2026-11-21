@@ -140,6 +140,8 @@ class Config(Strict):
     autonomy_enabled: bool = False
     autonomy_daily_minutes: int = Field(default=30, ge=0, le=240)
     autonomy_daily_items: int = Field(default=10, ge=0, le=100)
+    autonomy_topic_enabled: bool = False
+    autonomy_topics: list[str] = Field(default_factory=list, max_length=20)
     source_refresh_enabled: bool = False
     source_refresh_interval_hours: int = Field(default=24, ge=1, le=168)
     source_refresh_daily_limit: int = Field(default=5, ge=0, le=50)
@@ -174,6 +176,22 @@ class Config(Strict):
                 or not Path(item).is_absolute()
             ):
                 raise ValueError("allowed_paths_must_be_absolute")
+            if item not in cleaned:
+                cleaned.append(item)
+        return cleaned
+
+    @field_validator("autonomy_topics")
+    @classmethod
+    def valid_autonomy_topics(cls, value):
+        cleaned = []
+        for item in value:
+            item = item.strip()
+            if (
+                not item
+                or len(item) > 120
+                or any(ord(character) < 32 or ord(character) == 127 for character in item)
+            ):
+                raise ValueError("invalid_autonomy_topic")
             if item not in cleaned:
                 cleaned.append(item)
         return cleaned

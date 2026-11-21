@@ -71,6 +71,8 @@ export async function renderKnowledge(ui) {
                 autonomy_enabled: sourceConfig.autonomy_enabled ?? false,
                 autonomy_daily_minutes: sourceConfig.autonomy_daily_minutes ?? 30,
                 autonomy_daily_items: sourceConfig.autonomy_daily_items ?? 10,
+                autonomy_topic_enabled: Boolean(sourceConfig.autonomy_topic_enabled),
+                autonomy_topics: sourceConfig.autonomy_topics || [],
                 source_refresh_enabled: refreshEnabled.checked,
                 source_refresh_interval_hours: Number(refreshInterval.value),
                 source_refresh_daily_limit: Number(refreshLimit.value),

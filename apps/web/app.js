@@ -841,6 +841,8 @@ async function renderRoute(route, ui) {
                 autonomy_enabled: Boolean(conf.autonomy_enabled),
                 autonomy_daily_minutes: conf.autonomy_daily_minutes ?? 30,
                 autonomy_daily_items: conf.autonomy_daily_items ?? 10,
+                autonomy_topic_enabled: Boolean(conf.autonomy_topic_enabled),
+                autonomy_topics: conf.autonomy_topics || [],
                 source_refresh_enabled: Boolean(conf.source_refresh_enabled),
                 source_refresh_interval_hours: conf.source_refresh_interval_hours ?? 24,
                 source_refresh_daily_limit: conf.source_refresh_daily_limit ?? 5,

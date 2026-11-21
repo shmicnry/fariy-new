@@ -19,9 +19,10 @@ export async function renderAutonomy(ui) {
         mac_allowed_apps: [], mac_allowed_paths: [],
         autonomy_enabled: false, autonomy_daily_minutes: 30,
         autonomy_daily_items: 10,
+        autonomy_topic_enabled: false, autonomy_topics: [],
     };
     const autonomy = panel('自主预算');
-    autonomy.append(el('p', '自主候选只从学习缺口和知识冲突中产生。后台默认关闭，接受候选时会占用独立预算。', 'muted'));
+    autonomy.append(el('p', '自主候选从学习缺口、知识冲突和你登记的主题中产生。后台默认关闭，接受候选时会占用独立预算。', 'muted'));
     const enabled = el('input');
     enabled.type = 'checkbox';
     enabled.checked = Boolean(config.autonomy_enabled);
@@ -38,6 +39,13 @@ export async function renderAutonomy(ui) {
     items.max = 100;
     items.value = config.autonomy_daily_items;
     items.setAttribute('aria-label', '每日自主候选数');
+    const topicEnabled = el('input');
+    topicEnabled.type = 'checkbox';
+    topicEnabled.checked = Boolean(config.autonomy_topic_enabled);
+    topicEnabled.setAttribute('aria-label', '启用主题选题');
+    const topics = el('textarea');
+    topics.value = (config.autonomy_topics || []).join('\n');
+    topics.setAttribute('aria-label', '自主主题列表');
     const metrics = el('div', undefined, 'metric-grid');
     const minuteMetric = el('article', undefined, 'metric');
     const minuteValue = el('strong', '0 / 0');
@@ -79,6 +87,10 @@ export async function renderAutonomy(ui) {
     autonomy.append(enabledLabel);
     controlLabel('每日自主时长（分钟）', minutes, autonomy);
     controlLabel('每日候选数量', items, autonomy);
+    const topicLabel = el('label', undefined, 'check');
+    topicLabel.append(topicEnabled, el('span', '把我登记的主题纳入自主候选'));
+    autonomy.append(topicLabel);
+    controlLabel('自主主题（每行一个）', topics, autonomy, '需先在「知识与来源」配置允许域名，主题候选才会产生；学习仍通过你可见的来源导入完成，不会自动浏览网页。');
     autonomy.append(
         button('保存自主预算', async () => {
             await api('config', 'PUT', {
@@ -93,6 +105,8 @@ export async function renderAutonomy(ui) {
                 autonomy_enabled: enabled.checked,
                 autonomy_daily_minutes: Number(minutes.value),
                 autonomy_daily_items: Number(items.value),
+                autonomy_topic_enabled: topicEnabled.checked,
+                autonomy_topics: topics.value.split('\n').map(value => value.trim()).filter(Boolean),
                 source_refresh_enabled: Boolean(config.source_refresh_enabled),
                 source_refresh_interval_hours: config.source_refresh_interval_hours ?? 24,
                 source_refresh_daily_limit: config.source_refresh_daily_limit ?? 5,
@@ -104,9 +118,9 @@ export async function renderAutonomy(ui) {
     );
     await refreshBudget();
 
-    const queue = panel('学习与冲突候选');
+    const queue = panel('学习、冲突与主题候选');
     queue.append(
-        button('从当前缺口刷新候选', async () => {
+        button('从缺口与主题刷新候选', async () => {
             await api('autonomy/refresh', 'POST', {});
             await ui.refresh();
         })
@@ -132,6 +146,9 @@ export async function renderAutonomy(ui) {
                 await ui.refresh();
             })
         );
+        if (candidate.allowed_hosts && candidate.allowed_hosts.length) {
+            row.append(el('small', '允许来源域名：' + candidate.allowed_hosts.join('、'), 'muted'));
+        }
         queue.append(row);
     }
 
