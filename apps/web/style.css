@@ -1,21 +1,21 @@
 :root {
     color-scheme: light dark;
     --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
-    --canvas: #eaf0f3;
-    --canvas-deep: #dfe8ed;
-    --sidebar: rgba(226, 235, 240, 0.88);
+    --canvas: #f3f6fc;
+    --canvas-deep: #e7edfa;
+    --sidebar: rgba(233, 240, 252, 0.88);
     --surface: rgba(255, 255, 255, 0.94);
     --surface-raised: #ffffff;
-    --surface-muted: #f3f7f9;
-    --ink: #1a2e3d;
-    --ink-secondary: #506779;
-    --muted: #566b79;
-    --line: rgba(57, 84, 101, 0.17);
-    --line-strong: #b8c8d2;
-    --accent: #235f79;
-    --accent-hover: #194e65;
-    --accent-soft: #e2f0f4;
-    --focus: #338aab;
+    --surface-muted: #f4f7fd;
+    --ink: #17253c;
+    --ink-secondary: #4a5a74;
+    --muted: #5a6b85;
+    --line: rgba(43, 66, 102, 0.16);
+    --line-strong: #c3cfe2;
+    --accent: #2563eb;
+    --accent-hover: #1d4fd7;
+    --accent-soft: #e8f0fe;
+    --focus: #3b82f6;
     --danger: #9e3e3e;
     --danger-soft: #faecec;
     --warning: #7d5b21;
@@ -25,7 +25,7 @@
     --radius: 12px;
     --radius-lg: 16px;
     --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-    --shadow: 0 1px 2px rgba(24, 44, 58, 0.04), 0 14px 36px -28px rgba(24, 44, 58, 0.32);
+    --shadow: 0 1px 2px rgba(23, 37, 60, 0.04), 0 14px 36px -28px rgba(23, 37, 60, 0.32);
     --sidebar-width: 238px;
 }
 
@@ -1173,12 +1173,12 @@ blockquote p:last-child,
     gap: 14px;
     padding: 30px;
     overflow: hidden;
-    border: 1px solid rgba(148, 190, 213, 0.22);
+    border: 1px solid rgba(140, 170, 230, 0.24);
     border-radius: var(--radius);
     background:
-        radial-gradient(circle at 20% 25%, rgba(100, 182, 215, 0.16) 0 1px, transparent 2px),
+        radial-gradient(circle at 20% 25%, rgba(110, 168, 255, 0.16) 0 1px, transparent 2px),
         radial-gradient(circle at 72% 62%, rgba(255, 255, 255, 0.25) 0 1px, transparent 2px),
-        linear-gradient(145deg, #172a3b, #1c3b50);
+        linear-gradient(145deg, #16294a, #1d3a66);
     background-size: 37px 37px, 53px 53px, auto;
     color: #eff8fb;
 }
@@ -1187,9 +1187,9 @@ blockquote p:last-child,
     max-width: 220px;
     min-height: 40px;
     padding: 9px 14px;
-    border: 1px solid rgba(159, 214, 235, 0.3);
+    border: 1px solid rgba(150, 190, 250, 0.32);
     border-radius: 999px;
-    background: rgba(66, 125, 155, 0.5);
+    background: rgba(58, 105, 190, 0.5);
     color: #eef9fd;
     font-size: 12px;
     font-weight: 520;
@@ -1199,8 +1199,8 @@ blockquote p:last-child,
 }
 
 .star:hover:not(:disabled) {
-    border-color: rgba(159, 214, 235, 0.6);
-    background: rgba(79, 148, 181, 0.62);
+    border-color: rgba(150, 190, 250, 0.6);
+    background: rgba(72, 124, 214, 0.62);
     box-shadow: 0 7px 20px rgba(0, 0, 0, 0.18);
 }
 
@@ -1870,21 +1870,21 @@ blockquote p:last-child,
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --canvas: #111b23;
-        --canvas-deep: #0d161d;
-        --sidebar: rgba(23, 35, 45, 0.9);
-        --surface: rgba(25, 38, 49, 0.94);
-        --surface-raised: #1a2935;
-        --surface-muted: #14232d;
-        --ink: #e8f0f5;
-        --ink-secondary: #c1d0da;
-        --muted: #91a5b3;
-        --line: rgba(177, 203, 219, 0.14);
-        --line-strong: #405563;
-        --accent: #57a4c5;
-        --accent-hover: #76b7d2;
-        --accent-soft: #1d3948;
-        --focus: #6dbbdc;
+        --canvas: #0f1626;
+        --canvas-deep: #0b111e;
+        --sidebar: rgba(20, 29, 48, 0.9);
+        --surface: rgba(23, 33, 54, 0.94);
+        --surface-raised: #1a2740;
+        --surface-muted: #14203a;
+        --ink: #e9eefb;
+        --ink-secondary: #c2cde4;
+        --muted: #93a2c0;
+        --line: rgba(170, 190, 225, 0.14);
+        --line-strong: #3d4f70;
+        --accent: #6ea8ff;
+        --accent-hover: #8fbcff;
+        --accent-soft: #1c2f52;
+        --focus: #7fb1ff;
         --danger: #e18080;
         --danger-soft: #3a2427;
         --warning: #dcb56e;
@@ -1895,12 +1895,12 @@ blockquote p:last-child,
 
     body {
         background:
-            radial-gradient(circle at 80% 0, rgba(65, 111, 136, 0.16), transparent 34%),
+            radial-gradient(circle at 80% 0, rgba(64, 110, 200, 0.16), transparent 34%),
             #111b23;
     }
 
     button.button-secondary {
-        background: #1b2b37;
+        background: #1b2a44;
         color: var(--ink);
     }
 
@@ -1921,7 +1921,7 @@ blockquote p:last-child,
     input,
     select,
     textarea {
-        background-color: #172630;
+        background-color: #16233c;
     }
 
     input[type="file"] {
@@ -1930,9 +1930,9 @@ blockquote p:last-child,
 
     .starfield {
         background:
-            radial-gradient(circle at 20% 25%, rgba(100, 182, 215, 0.2) 0 1px, transparent 2px),
+            radial-gradient(circle at 20% 25%, rgba(110, 168, 255, 0.2) 0 1px, transparent 2px),
             radial-gradient(circle at 72% 62%, rgba(255, 255, 255, 0.25) 0 1px, transparent 2px),
-            linear-gradient(145deg, #101f2b, #173448);
+            linear-gradient(145deg, #101a30, #16294a);
         background-size: 37px 37px, 53px 53px, auto;
     }
 
@@ -1941,15 +1941,15 @@ blockquote p:last-child,
     }
 
     .mobile-tabs {
-        background: rgba(20, 32, 42, 0.88);
+        background: rgba(18, 27, 46, 0.88);
     }
 }
 
 @media (prefers-contrast: more) and (prefers-color-scheme: light) {
     :root {
-        --line: rgba(32, 65, 84, 0.32);
-        --line-strong: #78909f;
-        --muted: #4a6373;
+        --line: rgba(30, 58, 110, 0.32);
+        --line-strong: #7688a8;
+        --muted: #46587a;
     }
 
     button.button-secondary,
@@ -1967,9 +1967,9 @@ blockquote p:last-child,
 
 @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
     :root {
-        --line: rgba(205, 226, 239, 0.3);
-        --line-strong: #7896a8;
-        --muted: #b8c9d3;
+        --line: rgba(200, 218, 245, 0.3);
+        --line-strong: #7688b0;
+        --muted: #b6c4de;
     }
 
     button.button-secondary,
