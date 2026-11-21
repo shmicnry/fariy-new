@@ -461,6 +461,38 @@ struct ContentView: View {
 final class DesktopPetController: ObservableObject {
     @Published private(set) var isVisible = false
     private var panel: NSPanel?
+    private var moveObserver: NSObjectProtocol?
+    private var screenObserver: NSObjectProtocol?
+    private static let positionXKey = "fairy.pet.position.x"
+    private static let positionYKey = "fairy.pet.position.y"
+
+    // Position is stored as fractions of the visible frame so a screen change
+    // can restore it proportionally instead of losing the panel offscreen.
+    static func origin(
+        normalizedX: Double?,
+        normalizedY: Double?,
+        in frame: NSRect,
+        size: NSSize
+    ) -> NSPoint {
+        guard let normalizedX, let normalizedY else {
+            return NSPoint(x: frame.maxX - size.width - 24, y: frame.maxY - size.height - 26)
+        }
+        return clamped(
+            NSPoint(
+                x: frame.minX + normalizedX * frame.width,
+                y: frame.minY + normalizedY * frame.height
+            ),
+            in: frame,
+            size: size
+        )
+    }
+
+    static func clamped(_ point: NSPoint, in frame: NSRect, size: NSSize) -> NSPoint {
+        NSPoint(
+            x: min(max(point.x, frame.minX), frame.maxX - size.width),
+            y: min(max(point.y, frame.minY), frame.maxY - size.height)
+        )
+    }
 
     func setVisible(_ visible: Bool, model: FairyModel) {
         Task { @MainActor in
@@ -474,21 +506,27 @@ final class DesktopPetController: ObservableObject {
 
     private func show(model: FairyModel) {
         if let panel {
+            clampToVisibleFrame()
             panel.orderFrontRegardless()
             isVisible = true
             return
         }
         let frame = NSScreen.main?.visibleFrame
             ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let size = NSSize(width: 220, height: 270)
+        let defaults = UserDefaults.standard
         let content = MacDesktopPetView()
             .environmentObject(model)
             .environmentObject(self)
         let surface = FairyPetPanel(
             contentRect: NSRect(
-                x: frame.maxX - 244,
-                y: frame.maxY - 296,
-                width: 220,
-                height: 270
+                origin: Self.origin(
+                    normalizedX: defaults.object(forKey: Self.positionXKey) as? Double,
+                    normalizedY: defaults.object(forKey: Self.positionYKey) as? Double,
+                    in: frame,
+                    size: size
+                ),
+                size: size
             ),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -507,6 +545,41 @@ final class DesktopPetController: ObservableObject {
         surface.orderFrontRegardless()
         panel = surface
         isVisible = true
+        moveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: surface,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.savePosition() }
+        }
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.clampToVisibleFrame() }
+        }
+    }
+
+    private func savePosition() {
+        guard let panel,
+              let frame = (panel.screen ?? NSScreen.main)?.visibleFrame,
+              frame.width > 0, frame.height > 0 else { return }
+        let origin = panel.frame.origin
+        UserDefaults.standard.set(
+            Double((origin.x - frame.minX) / frame.width),
+            forKey: Self.positionXKey
+        )
+        UserDefaults.standard.set(
+            Double((origin.y - frame.minY) / frame.height),
+            forKey: Self.positionYKey
+        )
+    }
+
+    private func clampToVisibleFrame() {
+        guard let panel else { return }
+        let frame = (panel.screen ?? NSScreen.main)?.visibleFrame ?? panel.frame
+        panel.setFrameOrigin(Self.clamped(panel.frame.origin, in: frame, size: panel.frame.size))
     }
 
     func hide() {
@@ -616,6 +689,12 @@ private struct MacDesktopPetView: View {
             }
             HStack(spacing: 15) {
                 FairyPetFace(state: state, compact: false)
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) {
+                        openWindow(id: "main")
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
+                    .help("双击打开控制台")
                 VStack(alignment: .leading, spacing: 5) {
                     Text(state.title)
                         .font(.callout.weight(.semibold))
@@ -656,6 +735,19 @@ private struct MacDesktopPetView: View {
                 .stroke(.white.opacity(0.2), lineWidth: 1)
         }
         .padding(10)
+        .contextMenu {
+            Button("打开控制台") {
+                openWindow(id: "main")
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            Button("刷新状态") {
+                Task { await model.refreshAll() }
+            }
+            .disabled(model.isWorking)
+            Button("隐藏桌宠") {
+                Task { await model.setPetEnabled(false) }
+            }
+        }
         .onExitCommand {
             Task { await model.setPetEnabled(false) }
         }
