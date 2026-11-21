@@ -118,3 +118,30 @@ def test_capability_mode_reflects_semantic_config(semantic_app, tmp_path, monkey
         plain_client.get("/v2/capabilities").json()["vector_search_mode"]
         == "local_character_vector_hybrid"
     )
+
+
+def test_embedding_cache_hit_by_primary_key(tmp_path, monkeypatch):
+    calls = []
+
+    def handler(request):
+        payload = json.loads(request.content)
+        calls.append(payload)
+        return httpx.Response(200, json={"embeddings": [[1.0, 0.0] for _ in payload["input"]]})
+
+    monkeypatch.setenv("FAIRY_EMBEDDING_MODEL", "test-embedding")
+    app = create_app(
+        postgres_url(tmp_path), token="owner", transport=httpx.MockTransport(handler)
+    )
+    client = TestClient(app)
+    client.headers["Authorization"] = "Bearer owner"
+    svc = app.state.service
+    mat = svc.material("偏好", "我喜欢喝温水", "mat")["material"]
+    svc.memory("我喜欢喝温水", [mat["id"]], "m")
+    client.get("/v2/memories?q=温水")
+    first = len(calls)
+    assert first >= 1
+    client.get("/v2/memories?q=温水")
+    assert len(calls) == first  # cache hit, no re-embed
+    key = "test-embedding:" + hashlib.sha256("我喜欢喝温水".encode("utf-8")).hexdigest()
+    with app.state.db.sessions() as s:
+        assert s.get(Record, "embed:" + key) is not None

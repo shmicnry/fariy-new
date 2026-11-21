@@ -32,6 +32,8 @@ final class FairyModel: ObservableObject {
     private var api: FairyAPI?
     private var pollingTask: Task<Void, Never>?
     private var knownApprovalIDs: Set<String>?
+    private var knownReminderIDs: Set<String>?
+    private var cards: [CardItem] = []
     private lazy var notificationCenter: UNUserNotificationCenter? = {
         guard Bundle.main.bundleIdentifier != nil else { return nil }
         return UNUserNotificationCenter.current()
@@ -94,6 +96,10 @@ final class FairyModel: ObservableObject {
         if let value = try? await api.approvals() {
             approvals = value
             await notifyNewApprovals()
+        }
+        if let value = try? await api.cards() {
+            cards = value
+            await notifyDueReminders()
         }
         if let value = try? await api.skills() { skills = value }
         if let value = try? await api.autonomyBudget() { autonomyBudget = value }
@@ -264,7 +270,9 @@ final class FairyModel: ObservableObject {
             notificationPermission = granted ? "已授权" : "已拒绝"
             if granted {
                 knownApprovalIDs = []
+                knownReminderIDs = []
                 await notifyNewApprovals()
+                await notifyDueReminders()
             }
         } catch {
             notificationPermission = "授权失败"
@@ -331,6 +339,35 @@ final class FairyModel: ObservableObject {
             content.userInfo = ["route": "approvals", "id": approval.id]
             let request = UNNotificationRequest(
                 identifier: "approval-\(approval.id)-\(approval.revision)",
+                content: content,
+                trigger: nil
+            )
+            try? await notificationCenter.add(request)
+        }
+    }
+
+    private func notifyDueReminders() async {
+        let current = Set(cards.filter { $0.remindedAt != nil }.map(\.id))
+        guard let previous = knownReminderIDs else {
+            knownReminderIDs = current
+            return
+        }
+        let newIDs = current.subtracting(previous)
+        knownReminderIDs = current
+        guard !newIDs.isEmpty else { return }
+        guard let notificationCenter else { return }
+        let settings = await notificationCenter.notificationSettings()
+        guard [.authorized, .provisional].contains(settings.authorizationStatus) else {
+            return
+        }
+        for card in cards where newIDs.contains(card.id) {
+            let content = UNMutableNotificationContent()
+            content.title = "Fairy 提醒"
+            content.body = card.title
+            content.sound = .default
+            content.userInfo = ["route": "cards", "id": card.id]
+            let request = UNNotificationRequest(
+                identifier: "reminder-\(card.id)",
                 content: content,
                 trigger: nil
             )

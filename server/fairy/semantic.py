@@ -8,9 +8,8 @@ import math
 import os
 
 import httpx
-from sqlalchemy import select
 
-from .store import Record
+from .store import Record, now
 
 
 def cosine(left, right):
@@ -46,24 +45,18 @@ class SemanticService:
     def _cache_key(model, text):
         return model + ":" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
+    @staticmethod
+    def _cache_id(key):
+        # Primary-key lookup avoids scanning a growing cache window per query.
+        return "embed:" + key
+
     def _cached(self, session, keys):
-        rows = session.scalars(
-            select(Record)
-            .where(
-                Record.scope == "owner",
-                Record.kind == "embedding_cache",
-                Record.status == "active",
-            )
-            .order_by(Record.created_at.desc())
-            .limit(5000)
-        ).all()
         found = {}
-        for row in rows:
-            data = json.loads(row.payload)
-            key = data.get("key")
-            if key not in keys or key in found:
+        for key in keys:
+            row = session.get(Record, self._cache_id(key))
+            if not row or row.status != "active":
                 continue
-            vector = data.get("vector")
+            vector = json.loads(row.payload).get("vector")
             if (
                 isinstance(vector, list)
                 and len(vector) <= 4096
@@ -116,15 +109,23 @@ class SemanticService:
                     if len(vector) > 4096:
                         return None
                     vectors[text] = vector
-                    self.db.add(
-                        session,
-                        "owner",
-                        "embedding_cache",
-                        {
-                            "key": keys[text],
-                            "model": config["model"],
-                            "vector": vector,
-                        },
+                    session.add(
+                        Record(
+                            id=self._cache_id(keys[text]),
+                            scope="owner",
+                            kind="embedding_cache",
+                            revision=1,
+                            status="active",
+                            payload=json.dumps(
+                                {
+                                    "key": keys[text],
+                                    "model": config["model"],
+                                    "vector": vector,
+                                },
+                                ensure_ascii=False,
+                            ),
+                            created_at=now(),
+                        )
                     )
         return [vectors[text] for text in texts]
 

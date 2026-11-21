@@ -44,6 +44,15 @@ struct ApprovalItem: Codable, Identifiable {
     let expiresAt: String
 }
 
+struct CardItem: Codable, Identifiable {
+    let id: String
+    let revision: Int
+    let title: String
+    let subtype: String
+    let remindAt: String?
+    let remindedAt: String?
+}
+
 struct ModelSummary: Codable {
     let ollamaModel: String?
     let cloudReady: Bool?
@@ -228,6 +237,10 @@ actor FairyAPI {
 
     func approvals() async throws -> [ApprovalItem] {
         return try decoder.decode([ApprovalItem].self, from: await request("approvals"))
+    }
+
+    func cards() async throws -> [CardItem] {
+        return try decoder.decode([CardItem].self, from: await request("cards"))
     }
 
     func modelSummary() async throws -> ModelSummary {
