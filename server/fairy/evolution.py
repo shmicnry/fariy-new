@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -156,17 +157,92 @@ class EvolutionService(Service):
             )
             return view(row)
 
+    def _by_status(self, session, status):
+        rows = []
+        for row in self.rows(session, "evolution_experiment"):
+            data = json.loads(row.payload)
+            if data.get("status") == status:
+                rows.append((row, data))
+        return rows
+
+    def current_release(self):
+        with self.db.sessions() as session:
+            released = self._by_status(session, "released")
+            if not released:
+                return None
+            row, _ = released[-1]
+            return view(row)
+
+    def release(self, experiment_id):
+        """Mark this approved experiment as the current release record.
+
+        The ledger never deploys code or changes scoring; it only tracks which
+        evaluated candidate the owner has adopted, so rollback can restore the
+        previous adoption in one step.
+        """
+        with self.db.tx() as session:
+            row = self.get(session, experiment_id, "evolution_experiment")
+            data = json.loads(row.payload)
+            if data["status"] != "approved_for_review":
+                fail(409, "experiment_not_releasable")
+            now_iso = datetime.now(timezone.utc).isoformat()
+            for previous, previous_data in self._by_status(session, "released"):
+                previous_data.update(
+                    status="superseded",
+                    superseded_by=experiment_id,
+                    superseded_at=now_iso,
+                )
+                previous.payload = json.dumps(previous_data)
+                previous.revision += 1
+            data.update(
+                status="released",
+                released_at=now_iso,
+                runtime_changed=False,
+            )
+            row.payload = json.dumps(data)
+            row.revision += 1
+            self.db.emit(
+                session,
+                "owner",
+                "evolution.released",
+                {"id": experiment_id, "candidate": data["approved_candidate"]},
+            )
+            return view(row)
+
     def rollback(self, experiment_id):
         with self.db.tx() as session:
             row = self.get(session, experiment_id, "evolution_experiment")
             data = json.loads(row.payload)
-            data.update(status="rolled_back", runtime_changed=False)
+            if data["status"] not in ("approved_for_review", "released"):
+                fail(409, "experiment_not_rollbackable")
+            now_iso = datetime.now(timezone.utc).isoformat()
+            restored_id = None
+            if data["status"] == "released":
+                superseded = self._by_status(session, "superseded")
+                if superseded:
+                    previous, previous_data = max(
+                        superseded,
+                        key=lambda item: item[1].get("superseded_at", ""),
+                    )
+                    previous_data.update(
+                        status="released",
+                        restored_at=now_iso,
+                        restored_by=experiment_id,
+                    )
+                    previous.payload = json.dumps(previous_data)
+                    previous.revision += 1
+                    restored_id = previous.id
+            data.update(
+                status="rolled_back",
+                rolled_back_at=now_iso,
+                runtime_changed=False,
+            )
             row.payload = json.dumps(data)
             row.revision += 1
             self.db.emit(
                 session,
                 "owner",
                 "evolution.rolled_back",
-                {"id": experiment_id},
+                {"id": experiment_id, "restored": restored_id},
             )
             return view(row)

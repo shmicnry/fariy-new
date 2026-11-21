@@ -242,6 +242,17 @@ export async function renderAutonomy(ui) {
 
     const lab = panel('隔离进化实验');
     lab.append(el('p', '固定用例由所有者提供，候选输出只在记录中比较。评分器不可被候选修改，实验通过也不会自动部署运行版本。', 'muted'));
+    const currentRelease = await api('evolution/release');
+    lab.append(el('p', currentRelease
+        ? '当前发布记录：' + currentRelease.name + '（仅账本登记，运行版本不变）'
+        : '当前发布记录：暂无', 'muted'));
+    const releaseStatusLabels = {
+        evaluated: '已评测',
+        approved_for_review: '待人工评审',
+        released: '已登记发布',
+        superseded: '已被新发布替代',
+        rolled_back: '已回退',
+    };
     const experimentInput = el('textarea');
     experimentInput.value = JSON.stringify(evolutionSample, null, 2);
     controlLabel('实验用例与候选输出（JSON）', experimentInput, lab, '固定输入只用于隔离比较，不会自动改动运行版本。');
@@ -261,7 +272,7 @@ export async function renderAutonomy(ui) {
             el('h3', experiment.name),
             el('p', '基准 ' + experiment.baseline + '：' + experiment.baseline_score.toFixed(2)),
             el('p', '推荐 ' + experiment.winner + '：' + experiment.winner_score.toFixed(2)),
-            el('small', experiment.recommendation + ' · 运行版本未改变'),
+            el('small', (releaseStatusLabels[experiment.status] || experiment.status) + ' · ' + experiment.recommendation + ' · 运行版本未改变'),
         );
         if (experiment.status === 'evaluated' && experiment.recommendation === 'review_candidate') {
             row.append(button('记录为待人工评审', async () => {
@@ -271,11 +282,17 @@ export async function renderAutonomy(ui) {
                 await ui.refresh();
             }));
         }
-        if (experiment.status !== 'rolled_back') {
+        if (experiment.status === 'approved_for_review') {
+            row.append(button('登记为当前发布', async () => {
+                await api('evolution/experiments/' + experiment.id + '/release', 'POST', {});
+                await ui.refresh();
+            }));
+        }
+        if (['approved_for_review', 'released'].includes(experiment.status)) {
             row.append(confirmButton(
                 '回退实验记录',
                 '回退进化实验',
-                '实验记录会标记为已回退；运行版本不会发生改变。',
+                '记录会标记为已回退；若它是当前发布，上一条被替代的发布会恢复为当前发布。运行版本不会发生改变。',
                 async () => {
                     await api('evolution/experiments/' + experiment.id + '/rollback', 'POST', {});
                     await ui.refresh();

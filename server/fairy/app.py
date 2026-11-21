@@ -1023,6 +1023,14 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     def approve_experiment(id: str, body: EvolutionApproval):
         return evolution.approve(id, body.candidate)
 
+    @api.post("/evolution/experiments/{id}/release")
+    def release_experiment(id: str):
+        return evolution.release(id)
+
+    @api.get("/evolution/release")
+    def current_release():
+        return evolution.current_release()
+
     @api.post("/evolution/experiments/{id}/rollback")
     def rollback_experiment(id: str):
         return evolution.rollback(id)
