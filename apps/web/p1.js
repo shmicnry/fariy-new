@@ -173,7 +173,7 @@ export async function renderModels(ui) {
     costLimit.min = 0;
     costLimit.step = '0.01';
     const budget = await ui.api('models/budget');
-    const usedAmount = budget.used_microcents / 100_000_000;
+    const usedAmount = budget.used_microcents / 100_000;
     const limitAmount = budget.daily_cost_limit_cents / 100;
     cloud.append(ui.el(
         'p',
@@ -236,7 +236,7 @@ export async function renderModels(ui) {
             + ' · '
             + r.status
             + (r.cost_microcents !== undefined
-                ? ' · ' + (r.cost_microcents / 100_000_000).toFixed(6) + ' ' + (r.cloud_currency || '')
+                ? ' · ' + (r.cost_microcents / 100_000).toFixed(6) + ' ' + (r.cloud_currency || '')
                 : '')
             + (r.reason ? ' · ' + r.reason : '')
     ));

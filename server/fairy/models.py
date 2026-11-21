@@ -51,6 +51,45 @@ class Result:
     proposals: list[dict] = field(default_factory=list)
 
 
+def recover_stale_invocations(db, service):
+    """Expired dispatches are unknown, never automatically replayed after a crash."""
+    recovered = []
+    with db.tx() as s:
+        for row in service.rows(s, "model_invocation"):
+            if row.status != "started":
+                continue
+            data = json.loads(row.payload)
+            deadline = data.get("deadline_at")
+            if not deadline or datetime.fromisoformat(deadline) > datetime.now(
+                timezone.utc
+            ):
+                continue
+            row.status = "unknown"
+            row.revision += 1
+            data.update(
+                error="process_interrupted_outcome_unknown", finished_at=now()
+            )
+            row.payload = json.dumps(data)
+            turn = s.get(Record, data["turn_id"])
+            if turn and turn.status == "pending":
+                turn.status = "failed"
+                turn.revision += 1
+                payload = json.loads(turn.payload)
+                if turn.kind == "assessment_attempt":
+                    payload.update(error="inference_outcome_unknown")
+                else:
+                    payload.update(reply=None, error="inference_outcome_unknown")
+                turn.payload = json.dumps(payload)
+            recovered.append(row.id)
+            db.emit(
+                s,
+                "owner",
+                "model.recovered_unknown",
+                {"invocation_id": row.id, "turn_id": data["turn_id"]},
+            )
+    return recovered
+
+
 class ModelRouter:
     def __init__(self, service, settings, transport=None):
         self.service = service
@@ -60,42 +99,7 @@ class ModelRouter:
         self.recover_stale()
 
     def recover_stale(self):
-        """Expired dispatches are unknown, never automatically replayed after a crash."""
-        recovered = []
-        with self.db.tx() as s:
-            for row in self.service.rows(s, "model_invocation"):
-                if row.status != "started":
-                    continue
-                data = json.loads(row.payload)
-                deadline = data.get("deadline_at")
-                if not deadline or datetime.fromisoformat(deadline) > datetime.now(
-                    timezone.utc
-                ):
-                    continue
-                row.status = "unknown"
-                row.revision += 1
-                data.update(
-                    error="process_interrupted_outcome_unknown", finished_at=now()
-                )
-                row.payload = json.dumps(data)
-                turn = s.get(Record, data["turn_id"])
-                if turn and turn.status == "pending":
-                    turn.status = "failed"
-                    turn.revision += 1
-                    payload = json.loads(turn.payload)
-                    if turn.kind == "assessment_attempt":
-                        payload.update(error="inference_outcome_unknown")
-                    else:
-                        payload.update(reply=None, error="inference_outcome_unknown")
-                    turn.payload = json.dumps(payload)
-                recovered.append(row.id)
-                self.db.emit(
-                    s,
-                    "owner",
-                    "model.recovered_unknown",
-                    {"invocation_id": row.id, "turn_id": data["turn_id"]},
-                )
-        return recovered
+        return recover_stale_invocations(self.db, self.service)
 
     async def _json(self, url, timeout, body=None, headers=None):
         async def send():
@@ -242,10 +246,12 @@ class ModelRouter:
                 output_price = int(
                     conf.get("cloud_output_cents_per_million", 0)
                 )
+                # prices are cents per million tokens; 1 cent = 1000 microcents
                 reserved_microcents = (
                     max(0, int(estimated_input_tokens)) * input_price
                     + int(conf.get("cloud_max_output_tokens", 1024)) * output_price
-                )
+                    + 999
+                ) // 1000
                 cost_limit_microcents = (
                     int(conf.get("cloud_daily_cost_limit_cents", 0)) * 1000
                 )
@@ -353,7 +359,8 @@ class ModelRouter:
                         prompt_tokens * int(d.get("input_cents_per_million", 0))
                         + completion_tokens
                         * int(d.get("output_cents_per_million", 0))
-                    )
+                        + 999
+                    ) // 1000
                     d["charge_status"] = "settled"
                 else:
                     d["cost_microcents"] = int(d.get("reserved_microcents", 0))

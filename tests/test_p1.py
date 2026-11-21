@@ -307,8 +307,8 @@ def test_cloud_usage_is_priced_and_settled(factory):
     enable(
         c,
         cloud_currency="USD",
-        cloud_input_cents_per_million=1,
-        cloud_output_cents_per_million=2,
+        cloud_input_cents_per_million=100,
+        cloud_output_cents_per_million=200,
     )
     result = post(c, "turns", {"text": "计价问题"}).json()
     assert result["model_route"]["cloud_used"] is True
@@ -318,9 +318,9 @@ def test_cloud_usage_is_priced_and_settled(factory):
         if row["phase"] == "cloud"
     )
     assert invocation["charge_status"] == "settled"
-    assert invocation["cost_microcents"] == 50
+    assert invocation["cost_microcents"] == 5
     budget = c.get("/v2/models/budget").json()
-    assert budget["used_microcents"] == 50
+    assert budget["used_microcents"] == 5
     assert budget["currency"] == "USD"
 
 
@@ -651,6 +651,38 @@ def test_recovery_marks_expired_dispatch_unknown_without_retry(factory):
         current["status"] == "failed"
         and current["error"] == "inference_outcome_unknown"
     )
+    assert len(svc.list("model_invocation")) == 1
+
+
+def test_worker_cycle_recovers_expired_dispatch_without_api_restart(factory, tmp_path):
+    from datetime import datetime, timezone, timedelta
+
+    from fairy.autonomy import AutonomyService
+    from fairy.store import now
+    from fairy.worker import run_cycle
+
+    app, c = factory()
+    svc = app.state.service
+    turn = svc.start_turn("后台崩溃请求", "worker-crash")
+    _, snapshot = svc.model_context("后台崩溃请求")
+    conf = app.state.model_settings.runtime()
+    id = app.state.router.reserve(turn["id"], "local", conf, snapshot, "primary")
+    with app.state.db.tx() as s:
+        row = s.get(Record, id)
+        d = json.loads(row.payload)
+        d["deadline_at"] = (
+            datetime.now(timezone.utc) - timedelta(seconds=1)
+        ).isoformat()
+        row.payload = json.dumps(d)
+    state = tmp_path / "worker-state"
+    state.mkdir()
+    assert (
+        run_cycle(app.state.db, AutonomyService(app.state.db), str(state), now(), 1)
+        is True
+    )
+    assert svc.list("model_invocation")[0]["status"] == "unknown"
+    current = next(t for t in svc.list("turn") if t["id"] == turn["id"])
+    assert current["status"] == "failed"
     assert len(svc.list("model_invocation")) == 1
 
 

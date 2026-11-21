@@ -14,6 +14,7 @@ from .service import Service
 from .autonomy import AutonomyService
 from .knowledge import KnowledgeService
 from .link_fetch import fetch_text
+from .models import recover_stale_invocations
 
 
 def status_path(state_dir):
@@ -349,12 +350,14 @@ def run_cycle(db, autonomy, state_dir, started_at, cycle):
     tick_ok = False
     error = None
     try:
+        recovered = recover_stale_invocations(db, Service(db))
         tick_ok = tick(db)
         reminders = dispatch_due_reminders(db)
         source_result = refresh_due_source(db, autonomy)
         stopped = autonomy.enforce_budget()
         created = autonomy.refresh()
         summary = {
+            "model_invocations_recovered": len(recovered),
             "tick_processed": tick_ok,
             "reminders_dispatched": len(reminders),
             "autonomy_candidates_created": len(created),
@@ -365,6 +368,7 @@ def run_cycle(db, autonomy, state_dir, started_at, cycle):
         }
     except Exception as exc:
         summary = {
+            "model_invocations_recovered": 0,
             "tick_processed": False,
             "reminders_dispatched": 0,
             "autonomy_candidates_created": 0,
