@@ -278,10 +278,23 @@ def test_mac_open_app_requires_all_scopes_and_has_no_arbitrary_arguments(env):
         ).status_code
         == 200
     )
+    discovered = {
+        "applications": [
+            {
+                "name": "TextEdit",
+                "bundle_path": "/System/Applications/TextEdit.app",
+                "allowed": True,
+            }
+        ],
+        "allowlist_count": 1,
+        "launch_available": True,
+    }
     with patch(
         "fairy.mac_bridge.subprocess.run",
         return_value=SimpleNamespace(returncode=0, stdout="", stderr=""),
-    ) as runner:
+    ) as runner, patch(
+        "fairy.mac_bridge.MacBridge.applications", return_value=discovered
+    ):
         result = client.post(
             "/v2/skills/registry/" + skill["id"] + "/invoke",
             json=invocation_body,

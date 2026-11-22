@@ -589,7 +589,7 @@ def test_restart_retains_model_config_memory_versions_and_review(factory, tmp_pa
     m = saved_memory(c)
     new = correction(c, m).json()
     enable(c)
-    url = str(app.state.db.engine.url)
+    url = app.state.db.engine.url.render_as_string(hide_password=False)
     restarted = create_app(url, token="test")
     other = TestClient(restarted)
     other.headers["Authorization"] = "Bearer test"
@@ -643,7 +643,9 @@ def test_recovery_marks_expired_dispatch_unknown_without_retry(factory):
             datetime.now(timezone.utc) - timedelta(seconds=1)
         ).isoformat()
         row.payload = json.dumps(d)
-    restarted = create_app(str(app.state.db.engine.url), token="test")
+    restarted = create_app(
+        app.state.db.engine.url.render_as_string(hide_password=False), token="test"
+    )
     assert restarted.state.service.list("model_invocation")[0]["status"] == "unknown"
     replay = svc.start_turn("崩溃前请求", "crashed")
     current = next(t for t in svc.list("turn") if t["id"] == turn["id"])

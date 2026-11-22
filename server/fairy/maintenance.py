@@ -103,7 +103,9 @@ def restore_database(source, database_url, expected_sha256):
         check=False,
     )
     if process.returncode != 0:
-        raise ValueError("postgres_restore_failed")
+        detail = (process.stderr or "").strip().splitlines()
+        tail = detail[-1][:200] if detail else "no_stderr"
+        raise ValueError("postgres_restore_failed: " + tail)
     return {
         "restored": True,
         "file": str(source),

@@ -118,7 +118,7 @@ def test_file_chunks_restart_practice_and_delete(tmp_path):
         == response["material"]["id"]
     )
     assert tick(app.state.db)
-    reopened = Store(str(app.state.db.engine.url))
+    reopened = Store(app.state.db.engine.url.render_as_string(hide_password=False))
     while tick(reopened):
         pass
     parts = client_instance.get(

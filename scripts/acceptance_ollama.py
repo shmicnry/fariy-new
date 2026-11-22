@@ -109,7 +109,7 @@ def main():
         next_answer = turn("我喜欢喝什么？", "corrected_recall")
         assert "温水" in next_answer["reply"] and "茉莉花茶" not in next_answer["reply"]
         restarted = create_app(
-            str(app.state.db.engine.url),
+            app.state.db.engine.url.render_as_string(hide_password=False),
             token="isolated-live-acceptance",
             secrets_dir=Path(directory) / "credentials",
         )
