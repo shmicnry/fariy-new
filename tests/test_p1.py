@@ -936,6 +936,120 @@ def test_task_route_selects_local_profile(factory):
     assert json.loads(seen[-1].content)["model"] == "fixture"
 
 
+def classifier(reply):
+    return httpx.Response(200, json={"done": True, "message": {"content": reply}})
+
+
+def is_classifier_request(req):
+    try:
+        body = json.loads(req.content)
+    except ValueError:
+        return False
+    return isinstance(body, dict) and body.get("options", {}).get("num_predict") == 8
+
+
+def routing_config(c, **extra):
+    return config_payload(
+        c,
+        local_profiles=[
+            {"id": "coder", "name": "代码模型", "model": "coder-fixture"}
+        ],
+        task_routes={
+            "chat": {"local": "default", "cloud": "default"},
+            "reasoning": {"local": "default", "cloud": "default"},
+            "code": {"local": "coder", "cloud": "default"},
+            "writing": {"local": "default", "cloud": "default"},
+        },
+        **extra,
+    )
+
+
+def test_smart_routing_model_fallback_selects_profile(factory):
+    seen = []
+
+    def handler(req):
+        seen.append(req)
+        if is_classifier_request(req):
+            return classifier("code")
+        return local("代码回答")
+
+    app, c = factory(handler)
+    r = c.put("/v2/models/config", json=routing_config(c))
+    assert r.status_code == 200, r.text
+    result = post(c, "turns", {"text": "帮我看看这段东西哪里不对"}).json()
+    route = result["model_route"]
+    assert route["task"] == "code" and route["task_classifier"] == "model"
+    assert route["local_profile"] == "代码模型"
+    assert json.loads(seen[-1].content)["model"] == "coder-fixture"
+    guesses = [req for req in seen if is_classifier_request(req)]
+    assert len(guesses) == 1
+    assert json.loads(guesses[0].content)["model"] == "fixture"
+
+
+def test_smart_routing_garbage_guess_stays_chat(factory):
+    seen = []
+
+    def handler(req):
+        seen.append(req)
+        if is_classifier_request(req):
+            return classifier("我觉得这更像是在闲聊，不需要特别处理。")
+        return local()
+
+    app, c = factory(handler)
+    assert c.put("/v2/models/config", json=routing_config(c)).status_code == 200
+    result = post(c, "turns", {"text": "帮我看看这段东西哪里不对"}).json()
+    route = result["model_route"]
+    assert route["task"] == "chat" and route["task_classifier"] == "keywords"
+    assert json.loads(seen[-1].content)["model"] == "fixture"
+
+
+def test_smart_routing_skipped_with_default_routes(factory):
+    seen = []
+
+    def handler(req):
+        seen.append(req)
+        return local()
+
+    app, c = factory(handler)
+    result = post(c, "turns", {"text": "你好呀"}).json()
+    route = result["model_route"]
+    assert route["task"] == "chat" and route["task_classifier"] == "keywords"
+    assert not any(is_classifier_request(req) for req in seen)
+
+
+def test_smart_routing_toggle_off(factory):
+    seen = []
+
+    def handler(req):
+        seen.append(req)
+        if is_classifier_request(req):
+            return classifier("code")
+        return local()
+
+    app, c = factory(handler)
+    payload = routing_config(c)
+    payload["smart_task_routing"] = False
+    assert c.put("/v2/models/config", json=payload).status_code == 200
+    result = post(c, "turns", {"text": "帮我看看这段东西哪里不对"}).json()
+    route = result["model_route"]
+    assert route["task"] == "chat" and route["task_classifier"] == "keywords"
+    assert not any(is_classifier_request(req) for req in seen)
+
+
+def test_smart_routing_classifier_failure_stays_chat(factory):
+    def handler(req):
+        if is_classifier_request(req):
+            return httpx.Response(500)
+        return local()
+
+    app, c = factory(handler)
+    assert c.put("/v2/models/config", json=routing_config(c)).status_code == 200
+    result = post(c, "turns", {"text": "帮我看看这段东西哪里不对"}).json()
+    route = result["model_route"]
+    assert route["task"] == "chat" and route["task_classifier"] == "keywords"
+    assert result["reply"] == "本地回答"
+
+
 def test_task_route_cloud_profile_fallback_is_priced(factory):
     seen = []
 

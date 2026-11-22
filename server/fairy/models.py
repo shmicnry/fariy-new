@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import JSON
 
 from .store import Record, now
 from .identity import ground_personal_answer
-from .model_settings import classify_task, resolve_route
+from .model_settings import TASKS, classify_task, resolve_route
 
 
 def public_cloud_address(url):
@@ -612,10 +612,49 @@ class ModelRouter:
             )
             raise ModelError(code)
 
+    async def classify_with_model(self, text, conf):
+        """Keyword misses fall back to the local model; any failure stays on chat."""
+        try:
+            data = await self._json(
+                conf["ollama_base_url"] + "/api/chat",
+                min(conf["local_timeout_seconds"], 8),
+                {
+                    "model": conf["ollama_model"],
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "你是任务分类器。把用户消息分类为 chat、reasoning、code、writing 之一。只输出这一个英文单词，不要解释。",
+                        },
+                        {"role": "user", "content": text[:2000]},
+                    ],
+                    "stream": False,
+                    "think": False,
+                    "options": {"temperature": 0, "num_predict": 8, "num_ctx": 2048},
+                },
+            )
+            guess = data["message"]["content"].strip().lower()
+            return guess if guess in TASKS else None
+        except (ModelError, KeyError, TypeError, AttributeError):
+            return None
+
     async def answer(self, turn, text, routing, context, snapshot):
         conf = self.settings.runtime()
         snapshot[conf["id"]] = conf["revision"]
         task = classify_task(text)
+        classifier = "keywords"
+        if (
+            task == "chat"
+            and conf.get("smart_task_routing", True)
+            and any(
+                route.get("local") not in (None, "default")
+                or route.get("cloud") not in (None, "default")
+                for route in (conf.get("task_routes") or {}).values()
+            )
+        ):
+            guessed = await self.classify_with_model(text, conf)
+            if guessed:
+                task = guessed
+                classifier = "model"
         conf = resolve_route(conf, task)
         result = Result(
             route={
@@ -625,6 +664,7 @@ class ModelRouter:
                 "cloud_used": False,
                 "local_outcome": None,
                 "task": task,
+                "task_classifier": classifier,
                 "local_profile": conf["local_profile"],
                 "cloud_profile": conf["cloud_profile"],
             }

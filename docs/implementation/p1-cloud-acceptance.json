@@ -1,0 +1,6 @@
+{
+  "status": "skipped",
+  "cloud_live_tested": false,
+  "reason": "no_ready_cloud_config",
+  "guidance": "请先在后台『模型与路由』填写云端 Base URL、模型与密钥并启用，再运行本脚本。"
+}

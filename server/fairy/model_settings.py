@@ -158,6 +158,7 @@ class ModelConfig(BaseModel):
     local_context_window: int = Field(default=16384, ge=4096, le=65536)
     local_max_output_tokens: int = Field(default=1536, ge=128, le=4096)
     memory_mode: Literal["review", "off"] = "review"
+    smart_task_routing: bool = True
     cloud_enabled: bool = False
     cloud_base_url: str = Field(default="", max_length=500)
     cloud_model: str = Field(default="", max_length=160)
@@ -420,6 +421,7 @@ class ModelSettings:
             "task_routes",
             {t: {"local": "default", "cloud": "default"} for t in TASKS},
         )
+        data.setdefault("smart_task_routing", True)
         return data
 
     def credential(self, data):

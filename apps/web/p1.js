@@ -117,6 +117,7 @@ export async function renderModels(ui) {
         routeControls[task] = { local: localSelect, cloud: cloudSelect, initial: cfg.task_routes?.[task] || { local: 'default', cloud: 'default' } };
     }
     routes.append(routeGrid);
+    const smartRouting = check(ui, routes, '关键词无法判断时，用本地模型辅助选择任务路由', cfg.smart_task_routing !== false);
     const usedIds = () => new Set(['default', ...localCards.map(c => c.id), ...cloudCards.map(c => c.id)]);
     const newId = () => { let id; do { id = 'm' + Math.random().toString(36).slice(2, 8); } while (usedIds().has(id)); return id; };
     const refreshRouteOptions = () => {
@@ -320,6 +321,7 @@ export async function renderModels(ui) {
             cloud_output_cents_per_million: Math.round(Number(outputPrice.value) * 100),
             cloud_daily_cost_limit_cents: Math.round(Number(costLimit.value) * 100),
             fallback_on: selected.filter(([, input]) => input.checked).map(([value]) => value),
+            smart_task_routing: smartRouting.checked,
             clear_cloud_key: clear.checked
         });
         if (key.value) payload.cloud_api_key = key.value;
@@ -354,6 +356,7 @@ export async function renderModels(ui) {
         Object.assign(cfg, saved);
         clear.checked = false;
         enabled.checked = saved.cloud_enabled;
+        smartRouting.checked = saved.smart_task_routing !== false;
         status.textContent = '已保存，配置版本 ' + saved.revision;
         keyStatus.textContent = saved.cloud_key_configured ? '密钥已配置；服务不会返回密钥内容。' : '尚未配置云密钥。';
         for (const c of cloudCards) {
