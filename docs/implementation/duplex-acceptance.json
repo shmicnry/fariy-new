@@ -1,0 +1,45 @@
+{
+  "passed": true,
+  "steps": {
+    "voice_turn": {
+      "transcript": "你好,我喜歡喝溫水。",
+      "route": {
+        "provider": "ollama",
+        "model": "qwen3:4b",
+        "cloud_context": "question_only",
+        "cloud_used": false,
+        "local_outcome": "answered",
+        "task": "chat",
+        "task_classifier": "keywords",
+        "local_profile": "默认",
+        "cloud_profile": "默认",
+        "local_invocation_id": "bd677659-1520-4927-a53a-73900689ae71",
+        "omitted_context_entries": 0
+      },
+      "chunks": 4
+    },
+    "barge_in": {
+      "stopped_item": "e4089924-5574-49a6-9a1b-f3e91d4e89e2",
+      "interrupt_transcript": "等一下,我想打断你,先别说了。"
+    },
+    "backchannel": {
+      "duration_ms": 800,
+      "chunks_played": 15
+    },
+    "delegation": {
+      "work_id": "1e9851f8-b452-4e0c-8272-18c4f9f5c8d0",
+      "states": [
+        "QUEUED",
+        "RUNNING",
+        "DELIVERING",
+        "DELIVERED"
+      ],
+      "chunks": 1,
+      "reply": "根据最近的对话，你提到喜欢喝温水，所以今天适合喝温水。"
+    },
+    "cancel": {
+      "state": "CANCELLED"
+    }
+  },
+  "total_seconds": 41.07
+}
