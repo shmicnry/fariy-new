@@ -47,6 +47,8 @@ const errors = {
 export const explain = code => errors[code] || code;
 const fields = ['ollama_base_url', 'ollama_model', 'local_timeout_seconds', 'local_context_window', 'local_max_output_tokens', 'memory_mode', 'cloud_enabled', 'cloud_base_url', 'cloud_model', 'cloud_context', 'cloud_timeout_seconds', 'cloud_max_output_tokens', 'cloud_daily_request_limit', 'cloud_currency', 'cloud_input_cents_per_million', 'cloud_output_cents_per_million', 'cloud_daily_cost_limit_cents', 'fallback_on'];
 
+const taskLabels = { chat: '对话', reasoning: '推理', code: '代码', writing: '写作' };
+
 function field(ui, parent, title, value = '', type = 'text') {
     const label = ui.el('label', title, 'field');
     const input = ui.el(type === 'textarea' ? 'textarea' : 'input');
@@ -99,6 +101,38 @@ async function source(ui, id, parent) {
 export async function renderModels(ui) {
     const cfg = await ui.api('models/config');
     const semantic = await ui.api('semantic/status').catch(() => null);
+    const routes = ui.panel('任务路由');
+    const routeGrid = ui.el('div', undefined, 'route-grid');
+    routeGrid.append(ui.el('span', '任务', 'route-head'), ui.el('span', '本地模型', 'route-head'), ui.el('span', '云模型', 'route-head'));
+    const localCards = [];
+    const cloudCards = [];
+    const routeControls = {};
+    for (const [task, label] of Object.entries(taskLabels)) {
+        routeGrid.append(ui.el('span', label, 'route-task'));
+        const localSelect = ui.el('select');
+        localSelect.setAttribute('aria-label', label + '任务的本地模型');
+        const cloudSelect = ui.el('select');
+        cloudSelect.setAttribute('aria-label', label + '任务的云模型');
+        routeGrid.append(localSelect, cloudSelect);
+        routeControls[task] = { local: localSelect, cloud: cloudSelect, initial: cfg.task_routes?.[task] || { local: 'default', cloud: 'default' } };
+    }
+    routes.append(routeGrid);
+    const usedIds = () => new Set(['default', ...localCards.map(c => c.id), ...cloudCards.map(c => c.id)]);
+    const newId = () => { let id; do { id = 'm' + Math.random().toString(36).slice(2, 8); } while (usedIds().has(id)); return id; };
+    const refreshRouteOptions = () => {
+        const fill = (select, options, wanted) => {
+            const current = select.value || wanted;
+            select.replaceChildren();
+            for (const [v, text] of options) { const o = ui.el('option', text); o.value = v; select.append(o); }
+            select.value = options.some(([v]) => v === current) ? current : 'default';
+        };
+        for (const { local: ls, cloud: cs, initial } of Object.values(routeControls)) {
+            fill(ls, [['default', '默认 · ' + (name.value.trim() || cfg.ollama_model)], ...localCards.map(c => [c.id, c.refs.name.value.trim() || c.id])], initial.local);
+            fill(cs, [['default', '默认' + (model.value.trim() ? ' · ' + model.value.trim() : '')], ...cloudCards.map(c => [c.id, c.refs.name.value.trim() || c.id])], initial.cloud);
+        }
+        addLocalBtn.disabled = localCards.length >= 8;
+        addCloudBtn.disabled = cloudCards.length >= 8;
+    };
     const local = ui.panel('本地主模型');
     local.append(ui.el('p', '每轮先交给本机 Ollama。切换模型不会下载新模型。', 'muted'));
     const url = field(ui, local, 'Ollama 地址', cfg.ollama_base_url);
@@ -124,6 +158,32 @@ export async function renderModels(ui) {
         ['off', '不提议新记忆']
     ], cfg.memory_mode);
     local.append(ui.el('p', '已有记忆仍可用于回答。关闭新记忆提案不会删除对话记录。', 'muted'));
+    const localList = ui.el('div', undefined, 'profile-list');
+    const addLocalCard = p => {
+        const card = { id: p.id || newId(), refs: {} };
+        const box = ui.el('div', undefined, 'profile-card');
+        const grid = ui.el('div', undefined, 'profile-grid');
+        card.refs.name = field(ui, grid, '档案名称', p.name || '');
+        card.refs.model = field(ui, grid, '模型名称', p.model || '');
+        card.refs.context_window = field(ui, grid, '上下文窗口', p.context_window ?? 16384, 'number');
+        card.refs.context_window.min = 4096;
+        card.refs.context_window.max = 65536;
+        card.refs.max_output_tokens = field(ui, grid, '最大输出 Token', p.max_output_tokens ?? 1536, 'number');
+        card.refs.max_output_tokens.min = 128;
+        card.refs.max_output_tokens.max = 4096;
+        card.refs.timeout_seconds = field(ui, grid, '超时（秒）', p.timeout_seconds ?? 90, 'number');
+        card.refs.timeout_seconds.min = 5;
+        card.refs.timeout_seconds.max = 180;
+        box.append(grid, ui.confirmButton('删除档案', '删除本地模型档案', '删除后引用该档案的任务路由会回到默认模型。', () => {
+            localCards.splice(localCards.indexOf(card), 1);
+            box.remove();
+            refreshRouteOptions();
+        }));
+        localList.append(box);
+        localCards.push(card);
+    };
+    const addLocalBtn = ui.button('添加本地模型', () => { addLocalCard({}); refreshRouteOptions(); });
+    local.append(localList, addLocalBtn);
     const cloud = ui.panel('云副模型');
     const enabled = check(ui, cloud, '允许本地能力不足或故障时调用云副模型', cfg.cloud_enabled);
     const base = field(ui, cloud, '云接口地址（兼容 Chat Completions）', cfg.cloud_base_url);
@@ -182,6 +242,51 @@ export async function renderModels(ui) {
             : `今日已预留/结算 ${usedAmount.toFixed(6)} ${budget.currency}，未设置金额上限`,
         'muted'
     ));
+    const cloudList = ui.el('div', undefined, 'profile-list');
+    const addCloudCard = p => {
+        const card = { id: p.id || newId(), refs: {} };
+        const box = ui.el('div', undefined, 'profile-card');
+        const grid = ui.el('div', undefined, 'profile-grid');
+        card.refs.name = field(ui, grid, '档案名称', p.name || '');
+        card.refs.base_url = field(ui, grid, '接口地址（兼容 Chat Completions）', p.base_url || '');
+        card.refs.base_url.placeholder = 'https://你的服务商/v1';
+        card.refs.model = field(ui, grid, '模型名称', p.model || '');
+        card.refs.api_key = field(ui, grid, 'API 密钥', '', 'password');
+        card.refs.api_key.autocomplete = 'off';
+        card.refs.timeout_seconds = field(ui, grid, '超时（秒）', p.timeout_seconds ?? 60, 'number');
+        card.refs.timeout_seconds.min = 5;
+        card.refs.timeout_seconds.max = 120;
+        card.refs.max_output_tokens = field(ui, grid, '最大输出 Token', p.max_output_tokens ?? 1024, 'number');
+        card.refs.max_output_tokens.min = 128;
+        card.refs.max_output_tokens.max = 4096;
+        card.refs.input_price = field(ui, grid, '输入价格 / 百万 Token', (p.input_cents_per_million || 0) / 100, 'number');
+        card.refs.input_price.min = 0;
+        card.refs.input_price.step = '0.0001';
+        card.refs.output_price = field(ui, grid, '输出价格 / 百万 Token', (p.output_cents_per_million || 0) / 100, 'number');
+        card.refs.output_price.min = 0;
+        card.refs.output_price.step = '0.0001';
+        card.refs.enabled = check(ui, grid, '启用此云档案', Boolean(p.enabled));
+        card.refs.clear = check(ui, grid, '清除已保存的密钥', false);
+        const state = ui.el('p', undefined, 'profile-state');
+        card.setState = profile => {
+            state.dataset.state = profile?.ready ? 'ready' : profile?.key_configured ? 'configured' : 'missing';
+            state.textContent = profile?.ready ? '已就绪' : profile?.key_configured ? (profile.enabled ? '密钥已配置' : '密钥已配置 · 未启用') : '未配置密钥';
+            card.refs.api_key.placeholder = profile?.key_configured ? '已配置，留空保持' : '尚未配置';
+        };
+        card.setState(p);
+        box.append(grid, state, ui.confirmButton('删除档案', '删除云模型档案', '删除后该档案的密钥一并清除，引用它的任务路由回到默认云模型。', () => {
+            cloudCards.splice(cloudCards.indexOf(card), 1);
+            box.remove();
+            refreshRouteOptions();
+        }));
+        cloudList.append(box);
+        cloudCards.push(card);
+    };
+    const addCloudBtn = ui.button('添加云模型', () => { addCloudCard({}); refreshRouteOptions(); });
+    cloud.append(cloudList, addCloudBtn);
+    for (const p of cfg.local_profiles || []) addLocalCard(p);
+    for (const p of cfg.cloud_profiles || []) addCloudCard(p);
+    refreshRouteOptions();
     const triggers = ui.panel('何时请副模型协助');
     const selected = [];
     const labels = {
@@ -218,6 +323,32 @@ export async function renderModels(ui) {
             clear_cloud_key: clear.checked
         });
         if (key.value) payload.cloud_api_key = key.value;
+        payload.local_profiles = localCards.map(c => ({
+            id: c.id,
+            name: c.refs.name.value.trim(),
+            model: c.refs.model.value.trim(),
+            context_window: Number(c.refs.context_window.value),
+            max_output_tokens: Number(c.refs.max_output_tokens.value),
+            timeout_seconds: Number(c.refs.timeout_seconds.value)
+        }));
+        payload.cloud_profiles = cloudCards.map(c => {
+            const entry = {
+                id: c.id,
+                name: c.refs.name.value.trim(),
+                base_url: c.refs.base_url.value.trim(),
+                model: c.refs.model.value.trim(),
+                enabled: c.refs.enabled.checked && !c.refs.clear.checked,
+                timeout_seconds: Number(c.refs.timeout_seconds.value),
+                max_output_tokens: Number(c.refs.max_output_tokens.value),
+                input_cents_per_million: Math.round(Number(c.refs.input_price.value) * 100),
+                output_cents_per_million: Math.round(Number(c.refs.output_price.value) * 100),
+                clear_key: c.refs.clear.checked
+            };
+            if (c.refs.api_key.value) entry.api_key = c.refs.api_key.value;
+            return entry;
+        });
+        payload.task_routes = {};
+        for (const [task, ctl] of Object.entries(routeControls)) payload.task_routes[task] = { local: ctl.local.value || 'default', cloud: ctl.cloud.value || 'default' };
         const saved = await ui.api('models/config', 'PUT', payload);
         key.value = '';
         Object.assign(cfg, saved);
@@ -225,6 +356,16 @@ export async function renderModels(ui) {
         enabled.checked = saved.cloud_enabled;
         status.textContent = '已保存，配置版本 ' + saved.revision;
         keyStatus.textContent = saved.cloud_key_configured ? '密钥已配置；服务不会返回密钥内容。' : '尚未配置云密钥。';
+        for (const c of cloudCards) {
+            const savedProfile = (saved.cloud_profiles || []).find(x => x.id === c.id);
+            c.refs.api_key.value = '';
+            c.refs.clear.checked = false;
+            if (savedProfile) {
+                c.refs.enabled.checked = savedProfile.enabled;
+                c.setState(savedProfile);
+            }
+        }
+        refreshRouteOptions();
     }), status);
     const journal = ui.panel('最近的模型调用');
     const rows = await ui.api('models/invocations?limit=10');
@@ -589,7 +730,7 @@ export async function renderConversation(ui) {
             article.append(ui.el('p', t.reply || (t.error ? explain(t.error) : t.status === 'pending' ? '正在处理……' : '已中断'), 'assistant-message'));
             const r = t.model_route;
             if (r) {
-                article.append(ui.el('small', (r.provider === 'memory' ? '来源记忆校验' : r.cloud_used ? '云副模型' : '本地主模型') + ' · ' + r.model));
+                article.append(ui.el('small', (r.provider === 'memory' ? '来源记忆校验' : r.cloud_used ? '云副模型' : '本地主模型') + ' · ' + r.model + (taskLabels[r.task] ? ' · ' + taskLabels[r.task] + '任务' : '') + (r.local_profile && r.local_profile !== '默认' ? ' · ' + r.local_profile : '') + (r.cloud_used && r.cloud_profile && r.cloud_profile !== '默认' ? ' · ' + r.cloud_profile : '')));
                 if (r.cloud_skip_reason) article.append(ui.el('p', explain(r.cloud_skip_reason), 'route-note'));
                 if (r.local_outcome === 'needs_cloud' && !r.cloud_used) article.append(ui.el('p', '本机表示需要进一步协助，这条回答尚未解决问题。', 'route-note'))
             }

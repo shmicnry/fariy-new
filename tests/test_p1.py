@@ -824,3 +824,218 @@ def test_explicit_memory_statement_ack_has_correct_subject(factory):
     assert "关于你的待审阅" in result["reply"]
     assert "我喜欢" not in result["reply"] and "我记住了" not in result["reply"]
     assert result["memory_receipt"]["long_term_memory_written"] is False
+
+
+def test_task_classification_covers_four_lanes():
+    from fairy.model_settings import classify_task
+
+    assert classify_task("帮我写一段 python 脚本") == "code"
+    assert classify_task("证明这个方程有解") == "reasoning"
+    assert classify_task("帮我润色这段文案") == "writing"
+    assert classify_task("今天天气怎么样") == "chat"
+    assert classify_task("```js\nconsole.log(1)\n```") == "code"
+
+
+def config_payload(c, **extra):
+    cfg = c.get("/v2/models/config").json()
+    payload = {k: v for k, v in cfg.items() if k in ModelConfig.model_fields}
+    payload.update(extra)
+    return payload
+
+
+def test_model_profiles_crud_and_key_isolation(factory):
+    app, c = factory()
+    r = c.put(
+        "/v2/models/config",
+        json=config_payload(
+            c,
+            local_profiles=[
+                {"id": "coder", "name": "代码模型", "model": "qwen2.5-coder:7b"}
+            ],
+            cloud_profiles=[
+                {
+                    "id": "gpt",
+                    "name": "云端主力",
+                    "base_url": "https://api.provider.test/v1",
+                    "model": "cloud-pro",
+                    "api_key": "profile-key-never-real",
+                    "input_cents_per_million": 100,
+                    "output_cents_per_million": 200,
+                }
+            ],
+            task_routes={
+                "chat": {"local": "default", "cloud": "default"},
+                "reasoning": {"local": "default", "cloud": "gpt"},
+                "code": {"local": "coder", "cloud": "default"},
+                "writing": {"local": "default", "cloud": "default"},
+            },
+        ),
+    )
+    assert r.status_code == 200, r.text
+    cfg = r.json()
+    assert "profile-key-never-real" not in json.dumps(cfg)
+    assert "profile-key-never-real" not in c.get("/v2/events").text
+    profile = cfg["cloud_profiles"][0]
+    assert profile["key_configured"] and not profile["ready"]
+    assert "credential_ref" not in profile and "api_key" not in profile
+    vault = list(app.state.model_settings.vault.directory.glob("*.json"))
+    assert len(vault) == 1 and vault[0].stat().st_mode & 0o777 == 0o600
+    with app.state.db.sessions() as s:
+        assert (
+            "profile-key-never-real"
+            not in app.state.model_settings.record(s).payload
+        )
+    again = c.put("/v2/models/config", json=config_payload(c))
+    assert again.status_code == 200, again.text
+    assert again.json()["cloud_profiles"][0]["key_configured"]
+    assert len(list(app.state.model_settings.vault.directory.glob("*.json"))) == 1
+    payload = config_payload(c)
+    payload["cloud_profiles"][0]["enabled"] = True
+    enabled = c.put("/v2/models/config", json=payload)
+    assert enabled.status_code == 200, enabled.text
+    assert enabled.json()["cloud_profiles"][0]["ready"]
+    payload = config_payload(c, cloud_profiles=[])
+    payload["task_routes"]["reasoning"]["cloud"] = "default"
+    removed = c.put("/v2/models/config", json=payload)
+    assert removed.status_code == 200, removed.text
+    assert not list(app.state.model_settings.vault.directory.glob("*.json"))
+
+
+def test_task_route_selects_local_profile(factory):
+    seen = []
+
+    def handler(req):
+        seen.append(req)
+        return local("代码回答")
+
+    app, c = factory(handler)
+    r = c.put(
+        "/v2/models/config",
+        json=config_payload(
+            c,
+            local_profiles=[
+                {"id": "coder", "name": "代码模型", "model": "coder-fixture"}
+            ],
+            task_routes={
+                "chat": {"local": "default", "cloud": "default"},
+                "reasoning": {"local": "default", "cloud": "default"},
+                "code": {"local": "coder", "cloud": "default"},
+                "writing": {"local": "default", "cloud": "default"},
+            },
+        ),
+    )
+    assert r.status_code == 200, r.text
+    code_turn = post(c, "turns", {"text": "帮我写一个 python 函数"}).json()
+    route = code_turn["model_route"]
+    assert route["task"] == "code" and route["local_profile"] == "代码模型"
+    assert route["model"] == "coder-fixture"
+    assert json.loads(seen[-1].content)["model"] == "coder-fixture"
+    chat_turn = post(c, "turns", {"text": "你好"}, "chat-turn").json()
+    assert chat_turn["model_route"]["task"] == "chat"
+    assert chat_turn["model_route"]["local_profile"] == "默认"
+    assert json.loads(seen[-1].content)["model"] == "fixture"
+
+
+def test_task_route_cloud_profile_fallback_is_priced(factory):
+    seen = []
+
+    def handler(req):
+        seen.append(req)
+        return (
+            local("需要帮助", "needs_cloud", "capability_limit")
+            if req.url.host == "127.0.0.1"
+            else cloud()
+        )
+
+    app, c = factory(handler)
+    r = c.put(
+        "/v2/models/config",
+        json=config_payload(
+            c,
+            cloud_profiles=[
+                {
+                    "id": "reason",
+                    "name": "推理云",
+                    "base_url": "https://api.provider.test/v1",
+                    "model": "cloud-reason",
+                    "enabled": True,
+                    "api_key": "reason-key-never-real",
+                    "input_cents_per_million": 100,
+                    "output_cents_per_million": 200,
+                }
+            ],
+            task_routes={
+                "chat": {"local": "default", "cloud": "default"},
+                "reasoning": {"local": "default", "cloud": "reason"},
+                "code": {"local": "default", "cloud": "default"},
+                "writing": {"local": "default", "cloud": "default"},
+            },
+        ),
+    )
+    assert r.status_code == 200, r.text
+    result = post(c, "turns", {"text": "推导这个数学结论"}).json()
+    route = result["model_route"]
+    assert route["task"] == "reasoning" and route["cloud_used"]
+    assert route["cloud_profile"] == "推理云"
+    cloud_req = next(req for req in seen if req.url.host == "api.provider.test")
+    assert cloud_req.headers["Authorization"] == "Bearer reason-key-never-real"
+    assert json.loads(cloud_req.content)["model"] == "cloud-reason"
+    invocation = next(
+        row
+        for row in c.get("/v2/models/invocations").json()
+        if row["phase"] == "cloud"
+    )
+    assert invocation["charge_status"] == "settled"
+    assert invocation["cost_microcents"] == 5
+    chat_turn = post(c, "turns", {"text": "你好"}, "chat-only").json()
+    assert chat_turn["model_route"]["cloud_used"] is False
+    assert chat_turn["model_route"]["cloud_skip_reason"] == "cloud_disabled"
+
+
+def test_legacy_model_config_payload_normalizes(factory):
+    app, c = factory()
+    with app.state.db.tx() as s:
+        row = app.state.model_settings.record(s)
+        data = json.loads(row.payload)
+        for key in ("local_profiles", "cloud_profiles", "task_routes"):
+            data.pop(key, None)
+        row.payload = json.dumps(data)
+    cfg = c.get("/v2/models/config").json()
+    assert cfg["local_profiles"] == [] and cfg["cloud_profiles"] == []
+    assert cfg["task_routes"]["code"] == {"local": "default", "cloud": "default"}
+    result = post(c, "turns", {"text": "你好"}).json()
+    assert result["model_route"]["task"] == "chat"
+    assert result["model_route"]["local_profile"] == "默认"
+
+
+def test_profile_validation_rejects_bad_refs_and_ids(factory):
+    app, c = factory()
+    routes = c.get("/v2/models/config").json()["task_routes"]
+    routes["code"]["local"] = "ghost"
+    r = c.put("/v2/models/config", json=config_payload(c, task_routes=routes))
+    assert r.status_code == 422
+    dup = [
+        {"id": "same", "name": "甲", "model": "m1"},
+        {"id": "same", "name": "乙", "model": "m2"},
+    ]
+    r = c.put("/v2/models/config", json=config_payload(c, local_profiles=dup))
+    assert r.status_code == 422
+    reserved = [{"id": "default", "name": "保留", "model": "m"}]
+    r = c.put("/v2/models/config", json=config_payload(c, local_profiles=reserved))
+    assert r.status_code == 422
+    r = c.put(
+        "/v2/models/config",
+        json=config_payload(
+            c,
+            cloud_profiles=[
+                {
+                    "id": "nokey",
+                    "name": "未配密钥",
+                    "base_url": "https://api.provider.test/v1",
+                    "model": "cloud-pro",
+                    "enabled": True,
+                }
+            ],
+        ),
+    )
+    assert r.status_code == 422 and "cloud_profile_key_required" in r.text

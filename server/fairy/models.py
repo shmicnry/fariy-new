@@ -18,6 +18,7 @@ from sqlalchemy.dialects.postgresql import JSON
 
 from .store import Record, now
 from .identity import ground_personal_answer
+from .model_settings import classify_task, resolve_route
 
 
 def public_cloud_address(url):
@@ -614,6 +615,8 @@ class ModelRouter:
     async def answer(self, turn, text, routing, context, snapshot):
         conf = self.settings.runtime()
         snapshot[conf["id"]] = conf["revision"]
+        task = classify_task(text)
+        conf = resolve_route(conf, task)
         result = Result(
             route={
                 "provider": "ollama",
@@ -621,6 +624,9 @@ class ModelRouter:
                 "cloud_context": conf["cloud_context"],
                 "cloud_used": False,
                 "local_outcome": None,
+                "task": task,
+                "local_profile": conf["local_profile"],
+                "cloud_profile": conf["cloud_profile"],
             }
         )
         reason = None

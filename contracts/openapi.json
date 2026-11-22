@@ -4800,6 +4800,103 @@
         ],
         "title": "Choice"
       },
+      "CloudProfile": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "base_url": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Base Url",
+            "default": ""
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 160,
+            "title": "Model",
+            "default": ""
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 5.0,
+            "title": "Timeout Seconds",
+            "default": 60
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "maximum": 4096.0,
+            "minimum": 128.0,
+            "title": "Max Output Tokens",
+            "default": 1024
+          },
+          "input_cents_per_million": {
+            "type": "integer",
+            "maximum": 10000000.0,
+            "minimum": 0.0,
+            "title": "Input Cents Per Million",
+            "default": 0
+          },
+          "output_cents_per_million": {
+            "type": "integer",
+            "maximum": 10000000.0,
+            "minimum": 0.0,
+            "title": "Output Cents Per Million",
+            "default": 0
+          },
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key",
+            "writeOnly": true
+          },
+          "clear_key": {
+            "type": "boolean",
+            "title": "Clear Key",
+            "default": false
+          },
+          "key_configured": {
+            "type": "boolean",
+            "title": "Key Configured",
+            "default": false,
+            "readOnly": true
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "default": false,
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CloudProfile"
+      },
       "Config": {
         "properties": {
           "revision": {
@@ -5214,6 +5311,56 @@
         ],
         "title": "LinkInput"
       },
+      "LocalProfile": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Model"
+          },
+          "context_window": {
+            "type": "integer",
+            "maximum": 65536.0,
+            "minimum": 4096.0,
+            "title": "Context Window",
+            "default": 16384
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "maximum": 4096.0,
+            "minimum": 128.0,
+            "title": "Max Output Tokens",
+            "default": 1536
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "maximum": 180.0,
+            "minimum": 5.0,
+            "title": "Timeout Seconds",
+            "default": 90
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "model"
+        ],
+        "title": "LocalProfile"
+      },
       "Material": {
         "properties": {
           "text": {
@@ -5527,6 +5674,37 @@
             "type": "boolean",
             "title": "Clear Cloud Key",
             "default": false
+          },
+          "local_profiles": {
+            "items": {
+              "$ref": "#/components/schemas/LocalProfile"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Local Profiles"
+          },
+          "cloud_profiles": {
+            "items": {
+              "$ref": "#/components/schemas/CloudProfile"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Cloud Profiles"
+          },
+          "task_routes": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TaskRoute"
+            },
+            "propertyNames": {
+              "enum": [
+                "chat",
+                "reasoning",
+                "code",
+                "writing"
+              ]
+            },
+            "type": "object",
+            "title": "Task Routes"
           }
         },
         "additionalProperties": false,
@@ -5836,6 +6014,23 @@
           "text"
         ],
         "title": "SpeechInput"
+      },
+      "TaskRoute": {
+        "properties": {
+          "local": {
+            "type": "string",
+            "title": "Local",
+            "default": "default"
+          },
+          "cloud": {
+            "type": "string",
+            "title": "Cloud",
+            "default": "default"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TaskRoute"
       },
       "TranscriptionInput": {
         "properties": {
