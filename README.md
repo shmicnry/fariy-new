@@ -186,7 +186,7 @@ P1 基线 **62 项回归通过**；加入常驻服务、同步、语音、OCR、
 
 从 `apps/ios/FairyApp` 可运行 `swift build`，也可直接构建 `FairyApp.xcodeproj` 的 macOS/iOS Simulator App target；工程已包含显式 Info.plist、iOS entitlements 与 macOS App Sandbox 网络权限。尚缺开发者团队签名、APNs、真机推送和媒体验收。
 
-GitHub Actions 已配置。前次云端 runner 受账号账单/支出限制，未能启动；本机验证独立完成。`compose.yaml` 是已有 Postgres/API/worker 模板，本轮未运行容器验收；Postgres在P1收尾时已通过独立实例回归。Ollama 回环连接目前按宿主进程部署，容器不能把其自身的 `127.0.0.1` 当作宿主 Mac。
+GitHub Actions 已全绿（仓库改为 public 后 runner 正常分配；CI 固定 ubuntu-24.04 对齐本地 PostgreSQL 16 客户端，180 项测试与契约导出在云端全部通过）。`compose.yaml` 是已有 Postgres/API/worker 模板，本轮未运行容器验收；Postgres在P1收尾时已通过独立实例回归。Ollama 回环连接目前按宿主进程部署，容器不能把其自身的 `127.0.0.1` 当作宿主 Mac。
 
 ## 工程与资料
 
