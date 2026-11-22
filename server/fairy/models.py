@@ -613,7 +613,12 @@ class ModelRouter:
             raise ModelError(code)
 
     async def classify_with_model(self, text, conf):
-        """Keyword misses fall back to the local model; any failure stays on chat."""
+        """Keyword misses fall back to the local model; any failure stays on chat.
+
+        The enum grammar constrains content to one task label while thinking
+        runs into the separate thinking field, so qwen3-style models classify
+        reliably without leaking their reasoning into the answer.
+        """
         try:
             data = await self._json(
                 conf["ollama_base_url"] + "/api/chat",
@@ -623,17 +628,30 @@ class ModelRouter:
                     "messages": [
                         {
                             "role": "system",
-                            "content": "你是任务分类器。把用户消息分类为 chat、reasoning、code、writing 之一。只输出这一个英文单词，不要解释。",
+                            "content": (
+                                "你是任务分类器，只输出 chat、reasoning、code、writing 中的一个英文单词。\n"
+                                "code：编程、写程序、程序排错、代码相关请求。\n"
+                                "reasoning：数学题、逻辑推理、证明、求解。\n"
+                                "writing：改写、润色、翻译、文章创作。\n"
+                                "chat：其余日常闲聊。"
+                            ),
                         },
                         {"role": "user", "content": text[:2000]},
                     ],
                     "stream": False,
-                    "think": False,
-                    "options": {"temperature": 0, "num_predict": 8, "num_ctx": 2048},
+                    "format": {"type": "string", "enum": list(TASKS)},
+                    "options": {"temperature": 0, "num_predict": 1024, "num_ctx": 4096},
                 },
             )
-            guess = data["message"]["content"].strip().lower()
-            return guess if guess in TASKS else None
+            raw = data["message"]["content"].strip()
+            try:
+                raw = json.loads(raw)
+            except ValueError:
+                pass
+            if isinstance(raw, str):
+                guess = raw.strip().lower()
+                return guess if guess in TASKS else None
+            return None
         except (ModelError, KeyError, TypeError, AttributeError):
             return None
 

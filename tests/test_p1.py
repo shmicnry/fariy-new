@@ -937,7 +937,9 @@ def test_task_route_selects_local_profile(factory):
 
 
 def classifier(reply):
-    return httpx.Response(200, json={"done": True, "message": {"content": reply}})
+    return httpx.Response(
+        200, json={"done": True, "message": {"content": json.dumps(reply)}}
+    )
 
 
 def is_classifier_request(req):
@@ -945,7 +947,7 @@ def is_classifier_request(req):
         body = json.loads(req.content)
     except ValueError:
         return False
-    return isinstance(body, dict) and body.get("options", {}).get("num_predict") == 8
+    return isinstance(body, dict) and body.get("options", {}).get("num_predict") == 1024
 
 
 def routing_config(c, **extra):
@@ -984,6 +986,22 @@ def test_smart_routing_model_fallback_selects_profile(factory):
     guesses = [req for req in seen if is_classifier_request(req)]
     assert len(guesses) == 1
     assert json.loads(guesses[0].content)["model"] == "fixture"
+
+
+def test_smart_routing_bare_word_content_still_routes(factory):
+    def handler(req):
+        if is_classifier_request(req):
+            return httpx.Response(
+                200, json={"done": True, "message": {"content": "code"}}
+            )
+        return local("代码回答")
+
+    app, c = factory(handler)
+    assert c.put("/v2/models/config", json=routing_config(c)).status_code == 200
+    result = post(c, "turns", {"text": "帮我看看这段东西哪里不对"}).json()
+    route = result["model_route"]
+    assert route["task"] == "code" and route["task_classifier"] == "model"
+    assert route["local_profile"] == "代码模型"
 
 
 def test_smart_routing_garbage_guess_stays_chat(factory):
