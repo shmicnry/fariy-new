@@ -2837,6 +2837,45 @@
         }
       }
     },
+    "/pet/state": {
+      "get": {
+        "summary": "Pet State",
+        "description": "Deterministic mood from persisted signals; every state is traceable (缘起).",
+        "operationId": "pet_state_pet_state_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/worker/status": {
       "get": {
         "summary": "Worker Status",
@@ -4064,6 +4103,91 @@
         }
       }
     },
+    "/evolution/experiments/{id}/release": {
+      "post": {
+        "summary": "Release Experiment",
+        "operationId": "release_experiment_evolution_experiments__id__release_post",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/evolution/release": {
+      "get": {
+        "summary": "Current Release",
+        "operationId": "current_release_evolution_release_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/evolution/experiments/{id}/rollback": {
       "post": {
         "summary": "Rollback Experiment",
@@ -4116,6 +4240,148 @@
         "summary": "Cognition",
         "operationId": "cognition_cognition_snapshot_get",
         "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices": {
+      "get": {
+        "summary": "Device List",
+        "operationId": "device_list_devices_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Device Pair",
+        "operationId": "device_pair_devices_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevicePair"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/devices/{device_id}/revoke": {
+      "post": {
+        "summary": "Device Revoke",
+        "operationId": "device_revoke_devices__device_id__revoke_post",
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Device Id"
+            }
+          },
           {
             "name": "authorization",
             "in": "header",
@@ -4553,6 +4819,22 @@
             "title": "Pet Enabled",
             "default": false
           },
+          "pet_skin": {
+            "type": "string",
+            "enum": [
+              "builtin",
+              "live2d",
+              "vrm"
+            ],
+            "title": "Pet Skin",
+            "default": "builtin"
+          },
+          "pet_model_url": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Pet Model Url",
+            "default": ""
+          },
           "mac_execute": {
             "type": "boolean",
             "title": "Mac Execute",
@@ -4603,6 +4885,19 @@
             "title": "Autonomy Daily Items",
             "default": 10
           },
+          "autonomy_topic_enabled": {
+            "type": "boolean",
+            "title": "Autonomy Topic Enabled",
+            "default": false
+          },
+          "autonomy_topics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Autonomy Topics"
+          },
           "source_refresh_enabled": {
             "type": "boolean",
             "title": "Source Refresh Enabled",
@@ -4637,6 +4932,22 @@
           "revision"
         ],
         "title": "Config"
+      },
+      "DevicePair": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "DevicePair"
       },
       "DraftApproval": {
         "properties": {

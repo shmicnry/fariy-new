@@ -2,6 +2,8 @@
 
 最新设计规范：[Fairy UI 设计语言与交互规范 v1.1](docs/implementation/Fairy-UI设计语言与交互规范-v1.md)，对应本地 Skill：`$fairy-ui-design`。
 
+最新盘点：[功能全景与下一步计划（2026-11-22）](docs/implementation/功能全景与下一步计划-2026-11-22.md)。今日真实 PostgreSQL 全量回归 **180 passed**；OpenAPI 契约已重新导出，81 路径 / 96 操作与代码完全一致。
+
 最新阶段：[模型测验草稿与人工确认](docs/implementation/模型测验草稿与人工确认.md)。本地 Ollama 可生成候选题，但必须由所有者核对、修改和确认后才可执行。
 
 上一阶段：[云费用预算与原生图标](docs/implementation/云费用预算与原生图标.md)。云模型支持 Token 单价、派发前预留、实际结算和每日金额硬上限；iOS、iPad、macOS 与 PWA 已使用重新生成的无透明 Fairy 图标。
