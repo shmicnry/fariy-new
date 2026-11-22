@@ -96,7 +96,7 @@ class DuplexClient {
     if (!it) { it = { kind: m.kind, chunks: [], acked: 0 }; this.items.set(m.item_id, it); }
     it.chunks.push(m);
     if (!this.noAck.has(m.item_id)) {
-      this.ws.send(JSON.stringify({ type: "playback_ack", item_id: m.item_id, seq: m.seq, played: true }));
+      this.ws.send(JSON.stringify({ type: "playback_ack", item_id: m.item_id, playback_id: m.playback_id, seq: m.seq, played: true }));
       it.acked++;
     }
   }

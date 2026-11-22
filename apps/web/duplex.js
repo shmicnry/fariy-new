@@ -293,7 +293,7 @@ export async function renderDuplex(ui) {
                 onSpeech(msg);
                 break;
             case 'stop_playback':
-                stopItem(msg.item_id);
+                stopItem(msg.playback_id ?? msg.item_id);
                 break;
             case 'backchannel':
                 orbWrap.classList.add('is-backchannel');
@@ -315,24 +315,27 @@ export async function renderDuplex(ui) {
         if (!items.has(id)) items.set(id, {cancelled: false, acked: new Set(), bubble: null});
         return items.get(id)
     };
-    function ack(item, itemId, seq, played) {
+    function ack(item, seq, played) {
         if (item.acked.has(seq)) return;
         item.acked.add(seq);
-        send({type: 'playback_ack', item_id: itemId, seq, played});
+        send({type: 'playback_ack', item_id: item.id, playback_id: item.playbackId, seq, played});
     }
     function onSpeech(msg) {
-        const item = itemFor(msg.item_id);
+        const playbackKey = msg.playback_id ?? msg.item_id;
+        const item = itemFor(playbackKey);
+        item.id = msg.item_id;
+        item.playbackId = msg.playback_id;
         if (msg.kind === 'work') {
             if (!item.bubble) item.bubble = addBubble('assistant', msg.text || '', '后台任务结果');
             else if (msg.text) item.bubble.textContent += msg.text;
             scroll.scrollTop = scroll.scrollHeight;
         }
         if (item.cancelled) {
-            ack(item, msg.item_id, msg.seq, false);
+            ack(item, msg.seq, false);
             return
         }
         if (!msg.audio_base64) {
-            ack(item, msg.item_id, msg.seq, true);
+            ack(item, msg.seq, true);
             return
         }
         let bytes;
@@ -341,50 +344,50 @@ export async function renderDuplex(ui) {
             bytes = new Uint8Array(raw.length);
             for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
         } catch {
-            ack(item, msg.item_id, msg.seq, true);
+            ack(item, msg.seq, true);
             return
         }
         audioCtx.decodeAudioData(bytes.buffer.slice(0)).then((buffer) => {
             if (disposed || item.cancelled) {
-                ack(item, msg.item_id, msg.seq, false);
+                ack(item, msg.seq, false);
                 return
             }
-            queue.push({item_id: msg.item_id, seq: msg.seq, buffer, item});
+            queue.push({playbackKey, seq: msg.seq, buffer, item});
             pump();
-        }).catch(() => ack(item, msg.item_id, msg.seq, true));
+        }).catch(() => ack(item, msg.seq, true));
     }
     function pump() {
         if (playing || !queue.length || disposed) return;
         const next = queue.shift();
         if (next.item.cancelled) {
-            ack(next.item, next.item_id, next.seq, false);
+            ack(next.item, next.seq, false);
             pump();
             return
         }
         const src = audioCtx.createBufferSource();
         src.buffer = next.buffer;
         src.connect(audioCtx.destination);
-        playing = {src, item_id: next.item_id, seq: next.seq, item: next.item};
+        playing = {src, playbackKey: next.playbackKey, seq: next.seq, item: next.item};
         src.onended = () => {
             const was = playing;
             playing = null;
-            if (was && was.src === src) ack(next.item, next.item_id, next.seq, !next.item.cancelled && !disposed);
+            if (was && was.src === src) ack(next.item, next.seq, !next.item.cancelled && !disposed);
             pump();
         };
         src.start();
     }
-    function stopItem(itemId) {
-        const item = itemFor(itemId);
+    function stopItem(playbackKey) {
+        const item = itemFor(playbackKey);
         item.cancelled = true;
-        if (playing && playing.item_id === itemId) {
+        if (playing && playing.playbackKey === playbackKey) {
             try {
                 playing.src.stop();
             } catch { /* 已停止 */ }
         }
         for (let i = queue.length - 1; i >= 0; i -= 1) {
-            if (queue[i].item_id === itemId) {
+            if (queue[i].playbackKey === playbackKey) {
                 const [entry] = queue.splice(i, 1);
-                ack(entry.item, entry.item_id, entry.seq, false);
+                ack(entry.item, entry.seq, false);
             }
         }
     }

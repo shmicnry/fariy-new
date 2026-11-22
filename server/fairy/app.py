@@ -1274,14 +1274,16 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
         except ValueError:
             hello = {}
         supplied = hello.get("token", "") if isinstance(hello, dict) and hello.get("type") == "auth" else ""
-        authorized = False
-        if secret and isinstance(supplied, str) and secrets.compare_digest(supplied.encode(), secret.encode()):
-            authorized = True
-        elif isinstance(supplied, str) and supplied.startswith("fd_"):
-            authorized = bool(devices.authenticate(supplied))
-        if not authorized:
+        device_id = None
+        if not secret or not isinstance(supplied, str):
             await websocket.close(code=4401)
             return
+        if not secrets.compare_digest(supplied.encode(), secret.encode()):
+            if supplied.startswith("fd_"):
+                device_id = devices.authenticate(supplied)
+            if not device_id:
+                await websocket.close(code=4401)
+                return
         session = DuplexSession(websocket, duplex, "dx-" + secrets.token_hex(8))
         duplex.sessions.add(session)
         await session.send({
@@ -1292,9 +1294,22 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "capabilities": {"barge_in": True, "backchannel_ignore": True, "delegation": True},
         })
         duplex.adopt_completed(session)
+
+        async def watch_device():
+            while devices.active(device_id):
+                await asyncio.sleep(1)
+            session.close()
+            try:
+                await websocket.close(code=4401)
+            except (RuntimeError, WebSocketDisconnect):
+                pass
+
+        watcher = asyncio.create_task(watch_device()) if device_id else None
         try:
-            while True:
+            while not session.closed:
                 raw = await websocket.receive()
+                if session.closed:
+                    break
                 if raw.get("type") == "websocket.disconnect":
                     break
                 if raw.get("bytes"):
@@ -1313,6 +1328,9 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             pass
         finally:
             session.close()
+            if watcher:
+                watcher.cancel()
+                await asyncio.gather(watcher, return_exceptions=True)
 
     app.mount("/v2", api)
     root = Path(

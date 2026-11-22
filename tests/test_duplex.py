@@ -151,6 +151,19 @@ def test_ws_rejects_foreign_origin(factory):
         assert exc.value.code == 4403
 
 
+def test_ws_closes_when_paired_device_is_revoked(factory):
+    _, c = factory()
+    with c:
+        device = post(c, "devices", {"name": "语音测试设备"}, key="duplex-device").json()
+        with c.websocket_connect("/v2/duplex/ws") as ws:
+            ws.send_json({"type": "auth", "token": device["token"]})
+            assert ws.receive_json()["type"] == "ready"
+            assert c.post(f"/v2/devices/{device['id']}/revoke").status_code == 200
+            with pytest.raises(WebSocketDisconnect) as exc:
+                ws.receive_json()
+            assert exc.value.code == 4401
+
+
 def test_ws_ready_and_protocol_edges(factory):
     app, c = factory()
     fake_voice(app)
@@ -352,6 +365,38 @@ def test_delegation_delivers_only_after_playback_ack(factory):
             assert view["result"]["reply"] == "本地回答"
 
 
+@pytest.mark.parametrize("interrupt", [False, True])
+def test_delegation_waits_for_busy_origin(factory, interrupt):
+    app, c = factory()
+    fake_voice(app)
+    app.state.duplex.poll_interval = 0.05
+    with c, c.websocket_connect("/v2/duplex/ws") as origin:
+        auth(origin)
+        with c.websocket_connect("/v2/duplex/ws") as other:
+            auth(other)
+            origin.send_json({"type": "text", "text": "你好"})
+            reply, _ = drain(origin, lambda m: m.get("type") == "speech")
+            origin.send_json({"type": "delegate", "text": "帮我整理一份周报"})
+            work = drain(origin, lambda m: m.get("type") == "work")[0]["work"]
+            wait_work(c, work["id"], "COMPLETED")
+            if interrupt:
+                origin.send_json({"type": "interrupt"})
+                drain(origin, lambda m: m.get("type") == "stop_playback")
+                drain(origin, is_state("idle"))
+            else:
+                origin.send_json({
+                    "type": "playback_ack", "item_id": reply["item_id"],
+                    "playback_id": reply["playback_id"], "seq": 0, "played": True,
+                })
+            speech, _ = drain(origin, lambda m: m.get("type") == "speech" and m["kind"] == "work")
+            assert speech["item_id"] == work["id"]
+            origin.send_json({
+                "type": "playback_ack", "item_id": work["id"],
+                "playback_id": speech["playback_id"], "seq": 0, "played": True,
+            })
+            wait_work(c, work["id"], "DELIVERED")
+
+
 def test_interrupted_work_is_redelivered(factory):
     app, c = factory()
     fake_voice(app)
@@ -361,18 +406,25 @@ def test_interrupted_work_is_redelivered(factory):
             auth(ws)
             ws.send_json({"type": "delegate", "text": "帮我整理一份周报"})
             work = drain(ws, lambda m: m.get("type") == "work")[0]["work"]
-            drain(ws, lambda m: m.get("type") == "speech" and m["kind"] == "work")
+            first, _ = drain(ws, lambda m: m.get("type") == "speech" and m["kind"] == "work")
             ws.send_json({"type": "interrupt"})
             stop, _ = drain(ws, lambda m: m.get("type") == "stop_playback")
             assert stop["item_id"] == work["id"]
+            assert stop["playback_id"] == first["playback_id"]
             drain(ws, is_state("idle"))
             speech, _ = drain(
                 ws, lambda m: m.get("type") == "speech" and m["kind"] == "work"
             )
-            ws.send_json({
-                "type": "playback_ack", "item_id": work["id"],
-                "seq": 0, "played": True,
-            })
+            assert speech["item_id"] == work["id"]
+            assert speech["playback_id"] != first["playback_id"]
+            ack = {"type": "playback_ack", "item_id": work["id"], "seq": 0}
+            ws.send_json({**ack, "playback_id": first["playback_id"], "played": False})
+            ws.send_json({**ack, "playback_id": speech["playback_id"], "seq": -1, "played": True})
+            ws.send_json({**ack, "playback_id": speech["playback_id"], "played": "false"})
+            ws.send_json({"type": "ping"})
+            assert ws.receive_json() == {"type": "pong"}
+            wait_work(c, work["id"], "DELIVERING")
+            ws.send_json({**ack, "playback_id": speech["playback_id"], "played": True})
             drain(ws, is_state("idle"))
             wait_work(c, work["id"], "DELIVERED")
 
@@ -494,6 +546,29 @@ def test_evolution_contrasts_compose_and_release(factory):
     r2 = post(c, "evolution/experiments", again, key="exp-compose-2")
     assert r2.status_code == 200
     assert r2.json()["prior_lessons"]
+
+
+def test_evolution_compares_repeated_prompts_and_skips_overlapping_candidate(factory):
+    _, c = factory()
+    payload = _experiment_payload(
+        "重叠候选实验",
+        ["含甲要点", "无关乙", "含丙要点"],
+        ["无关甲", "含乙要点", "含丙要点"],
+    )
+    payload["cases"][2]["input"] = payload["cases"][0]["input"]
+    payload["candidates"].insert(1, {
+        "name": "overlap", "outputs": ["含甲要点", "含乙要点", "含丙要点"],
+    })
+    for index in range(2):
+        r = post(c, "evolution/experiments", payload, key=f"exp-overlap-{index}")
+        assert r.status_code == 200
+        exp = r.json()
+        assert exp["contrasts"]["cand_a"] == {
+            "gained": ["案例甲"], "regressed": [],
+            "both_pass": ["案例甲"], "both_fail": ["案例乙"],
+        }
+        assert exp["compose_suggestion"]["candidates"] == ["cand_a", "cand_b"]
+        payload["candidates"].reverse()
 
 
 def test_evolution_regressions_block_composition(factory):

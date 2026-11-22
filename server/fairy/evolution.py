@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+from itertools import combinations
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -91,16 +92,18 @@ class EvolutionService(Service):
             baseline = next(
                 item for item in candidate_results if item["name"] == body.baseline
             )
-            baseline_scores = {c["input"]: c["score"] for c in baseline["cases"]}
             contrasts = {}
+            composable = {}
             for item in candidate_results:
                 if item["name"] == body.baseline:
                     continue
                 gained, regressed, both_pass, both_fail = [], [], [], []
-                for case in item["cases"]:
-                    base = baseline_scores[case["input"]]
+                gained_indices = set()
+                for index, (case, baseline_case) in enumerate(zip(item["cases"], baseline["cases"])):
+                    base = baseline_case["score"]
                     if case["score"] == 1.0 and base < 1.0:
                         gained.append(case["input"])
+                        gained_indices.add(index)
                     elif case["score"] < 1.0 and base == 1.0:
                         regressed.append(case["input"])
                     elif case["score"] == 1.0:
@@ -113,20 +116,24 @@ class EvolutionService(Service):
                     "both_pass": both_pass,
                     "both_fail": both_fail,
                 }
-            # Compose only from behavioral evidence: candidates that gain cases
-            # without regressing any, on disjoint case sets, can be combined.
+                if gained_indices and not regressed:
+                    composable[item["name"]] = gained_indices
+
+            # At most four non-baseline candidates. Check all combinations so
+            # an early overlapping candidate cannot hide a stronger composition.
+            picked, coverage = (), 0
+            names = sorted(composable)
+            for size in range(2, len(names) + 1):
+                for group in combinations(names, size):
+                    gains = [composable[name] for name in group]
+                    covered = len(set.union(*gains))
+                    if covered == sum(map(len, gains)) and covered > coverage:
+                        picked, coverage = group, covered
             compose_suggestion = None
-            picked, covered = [], set()
-            for name, contrast in contrasts.items():
-                gains = set(contrast["gained"])
-                if not gains or contrast["regressed"] or gains & covered:
-                    continue
-                picked.append(name)
-                covered |= gains
-            if len(picked) >= 2:
+            if picked:
                 compose_suggestion = {
-                    "candidates": picked,
-                    "case_sources": {n: contrasts[n]["gained"] for n in picked},
+                    "candidates": list(picked),
+                    "case_sources": {name: contrasts[name]["gained"] for name in picked},
                     "rationale": "disjoint_gains_no_regressions",
                 }
             prior_lessons = [

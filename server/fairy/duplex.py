@@ -147,12 +147,12 @@ class DuplexSession:
         self.state = state
         await self.send({"type": "state", "state": state})
 
-    def _stop_playback(self) -> str | None:
+    def _stop_playback(self) -> dict | None:
         pb = self.playback
         if pb and not pb["stopped"]:
             pb["stopped"] = True
             pb["done"].set()
-            return pb["item_id"]
+            return {"type": "stop_playback", "item_id": pb["item_id"], "playback_id": pb["playback_id"]}
         return None
 
     async def handle_audio(self, pcm: bytes) -> None:
@@ -181,7 +181,7 @@ class DuplexSession:
         ):
             item = self._stop_playback()
             if item:
-                await self.send({"type": "stop_playback", "item_id": item})
+                await self.send(item)
             await self._set_state("listening")
         for event in ended:
             await self._on_speech_finished(event)
@@ -265,6 +265,7 @@ class DuplexSession:
         chunks = split_sentences(text)
         pb = {
             "item_id": item_id,
+            "playback_id": uuid4().hex,
             "kind": kind,
             "total": len(chunks),
             "played": set(),
@@ -272,37 +273,42 @@ class DuplexSession:
             "done": asyncio.Event(),
         }
         self.playback = pb
-        if not chunks:
-            pb["done"].set()
-        for seq, chunk in enumerate(chunks):
-            if pb["stopped"]:
-                break
-            try:
-                audio = await asyncio.to_thread(self.runtime.voice.speak, chunk)
-                audio_b64 = base64.b64encode(audio).decode()
-            except Exception:
-                audio_b64 = None  # text-only fallback keeps non-mac hosts usable
-            if pb["stopped"]:
-                break
-            await self.send({
-                "type": "speech", "item_id": item_id, "kind": kind,
-                "seq": seq, "total": len(chunks), "text": chunk,
-                "audio_base64": audio_b64, "sample_rate": 22050,
-                "final": seq == len(chunks) - 1,
-            })
-        if not pb["stopped"]:
-            try:
-                await asyncio.wait_for(pb["done"].wait(), timeout=180)
-            except asyncio.TimeoutError:
-                pb["stopped"] = True
-        outcome = "interrupted" if pb["stopped"] else "played"
-        if self.playback is pb:
-            self.playback = None
-        return outcome
+        try:
+            if not chunks:
+                pb["done"].set()
+            for seq, chunk in enumerate(chunks):
+                if pb["stopped"]:
+                    break
+                try:
+                    audio = await asyncio.to_thread(self.runtime.voice.speak, chunk)
+                    audio_b64 = base64.b64encode(audio).decode()
+                except Exception:
+                    audio_b64 = None  # text-only fallback keeps non-mac hosts usable
+                if pb["stopped"]:
+                    break
+                await self.send({
+                    "type": "speech", "item_id": item_id, "playback_id": pb["playback_id"], "kind": kind,
+                    "seq": seq, "total": len(chunks), "text": chunk,
+                    "audio_base64": audio_b64, "sample_rate": 22050,
+                    "final": seq == len(chunks) - 1,
+                })
+            if not pb["stopped"]:
+                try:
+                    await asyncio.wait_for(pb["done"].wait(), timeout=180)
+                except asyncio.TimeoutError:
+                    pb["stopped"] = True
+            return "interrupted" if pb["stopped"] else "played"
+        finally:
+            if self.playback is pb:
+                self.playback = None
 
-    def ack(self, item_id: str, seq: int, played: bool) -> None:
+    def ack(self, item_id: str, seq: int, played: bool, playback_id: str | None = None) -> None:
         pb = self.playback
         if not pb or pb["item_id"] != item_id:
+            return
+        if playback_id is not None and playback_id != pb["playback_id"]:
+            return
+        if type(played) is not bool or type(seq) is not int or not 0 <= seq < pb["total"]:
             return
         if not played:
             pb["stopped"] = True
@@ -315,7 +321,7 @@ class DuplexSession:
     async def interrupt(self) -> None:
         item = self._stop_playback()
         if item:
-            await self.send({"type": "stop_playback", "item_id": item})
+            await self.send(item)
         if self.turn_task and not self.turn_task.done():
             self.turn_task.cancel()
         await self._set_state("idle")
@@ -330,12 +336,12 @@ class DuplexSession:
             if self.state == "speaking":
                 item = self._stop_playback()
                 if item:
-                    await self.send({"type": "stop_playback", "item_id": item})
+                    await self.send(item)
             self._start_turn(text)
         elif kind == "interrupt":
             await self.interrupt()
         elif kind == "playback_ack":
-            self.ack(msg.get("item_id"), msg.get("seq"), bool(msg.get("played")))
+            self.ack(msg.get("item_id"), msg.get("seq"), msg.get("played"), msg.get("playback_id"))
         elif kind == "delegate":
             text = str(msg.get("text") or "").strip()[:16000]
             if not text:
@@ -369,8 +375,8 @@ class DuplexSession:
 class DuplexRuntime:
     """Background work lifecycle: QUEUED -> RUNNING -> COMPLETED -> DELIVERING -> DELIVERED.
 
-    COMPLETED only means the answer exists; DELIVERED requires the originating
-    (or any idle) session to actually play it and acknowledge every chunk.
+    COMPLETED only means the answer exists; DELIVERED requires playback
+    acknowledgments. An active originating session gets the result when idle.
     """
 
     def __init__(self, db, service, run_turn, voice) -> None:
@@ -474,8 +480,12 @@ class DuplexRuntime:
             data = self._work_view(work_id)
             if data.get("state") != "COMPLETED":
                 return
-            session = next((s for s in self.sessions if s.can_deliver()), None)
-            if session is None:
+            origin = next(
+                (s for s in self.sessions if s.session_id == data.get("origin_session") and not s.closed),
+                None,
+            )
+            session = origin or next((s for s in self.sessions if s.can_deliver()), None)
+            if session is None or not session.can_deliver():
                 await asyncio.sleep(self.poll_interval)
                 continue
             try:
@@ -535,7 +545,7 @@ class DuplexRuntime:
                 if session.session_id == target:
                     item = session._stop_playback()
                     if item:
-                        await session.send({"type": "stop_playback", "item_id": item})
+                        await session.send(item)
         task = self.works.get(work_id)
         if task and not task.done():
             self._set_work_state(work_id, "CANCELLING", expect=state)
