@@ -276,6 +276,28 @@ export async function renderAutonomy(ui) {
             el('p', '推荐 ' + experiment.winner + '：' + experiment.winner_score.toFixed(2)),
             el('small', (releaseStatusLabels[experiment.status] || experiment.status) + ' · ' + experiment.recommendation + ' · 运行版本未改变'),
         );
+        const contrastRow = el('div', undefined, 'contrast-row');
+        for (const [name, contrast] of Object.entries(experiment.contrasts || {})) {
+            const gained = (contrast.gained || []).length;
+            const regressed = (contrast.regressed || []).length;
+            contrastRow.append(el('span', name + ' · 新增通过 ' + gained, 'tag'));
+            if (regressed) {
+                contrastRow.append(el('span', name + ' · 回退 ' + regressed, 'tag tag-warning'));
+            }
+        }
+        if (contrastRow.children.length) {
+            row.append(contrastRow);
+        }
+        if (experiment.compose_suggestion) {
+            const suggestion = experiment.compose_suggestion;
+            const composeRow = el('div', undefined, 'contrast-row');
+            composeRow.append(el('span', '组合建议', 'tag'));
+            for (const name of suggestion.candidates) {
+                const count = ((suggestion.case_sources || {})[name] || []).length;
+                composeRow.append(el('span', name + ' · 贡献 ' + count + ' 例', 'tag'));
+            }
+            row.append(composeRow);
+        }
         if (experiment.status === 'evaluated' && experiment.recommendation === 'review_candidate') {
             row.append(button('记录为待人工评审', async () => {
                 await api('evolution/experiments/' + experiment.id + '/approve', 'POST', {
@@ -303,5 +325,29 @@ export async function renderAutonomy(ui) {
             ));
         }
         lab.append(row);
+    }
+
+    const lessons = panel('经验账本');
+    lessons.append(el('p', '登记发布与回退都会留下带证据的经验，后续实验会参考最近五条。', 'muted'));
+    const lessonRows = (await api('evolution/lessons')).reverse();
+    if (!lessonRows.length) {
+        lessons.append(el('p', '暂无经验记录。', 'muted'));
+    }
+    for (const lesson of lessonRows) {
+        const row = el('article', undefined, 'memory-row');
+        const head = el('div', undefined, 'contrast-row');
+        head.append(el('span', lesson.kind === 'adoption' ? '采纳' : '警示', lesson.kind === 'adoption' ? 'tag' : 'tag tag-warning'));
+        if (lesson.candidate) {
+            head.append(el('span', lesson.candidate, 'tag'));
+        }
+        row.append(head, el('p', lesson.lesson));
+        const evidence = lesson.evidence || {};
+        if (Array.isArray(evidence.gained) || Array.isArray(evidence.regressed)) {
+            row.append(el('small',
+                '新增通过 ' + (evidence.gained || []).length + ' 例 · 回退 ' + (evidence.regressed || []).length + ' 例 · 得分 '
+                + Number(evidence.baseline_score || 0).toFixed(2) + ' → ' + Number(evidence.winner_score || 0).toFixed(2),
+                'muted'));
+        }
+        lessons.append(row);
     }
 }

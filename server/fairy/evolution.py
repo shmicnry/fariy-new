@@ -91,6 +91,47 @@ class EvolutionService(Service):
             baseline = next(
                 item for item in candidate_results if item["name"] == body.baseline
             )
+            baseline_scores = {c["input"]: c["score"] for c in baseline["cases"]}
+            contrasts = {}
+            for item in candidate_results:
+                if item["name"] == body.baseline:
+                    continue
+                gained, regressed, both_pass, both_fail = [], [], [], []
+                for case in item["cases"]:
+                    base = baseline_scores[case["input"]]
+                    if case["score"] == 1.0 and base < 1.0:
+                        gained.append(case["input"])
+                    elif case["score"] < 1.0 and base == 1.0:
+                        regressed.append(case["input"])
+                    elif case["score"] == 1.0:
+                        both_pass.append(case["input"])
+                    else:
+                        both_fail.append(case["input"])
+                contrasts[item["name"]] = {
+                    "gained": gained,
+                    "regressed": regressed,
+                    "both_pass": both_pass,
+                    "both_fail": both_fail,
+                }
+            # Compose only from behavioral evidence: candidates that gain cases
+            # without regressing any, on disjoint case sets, can be combined.
+            compose_suggestion = None
+            picked, covered = [], set()
+            for name, contrast in contrasts.items():
+                gains = set(contrast["gained"])
+                if not gains or contrast["regressed"] or gains & covered:
+                    continue
+                picked.append(name)
+                covered |= gains
+            if len(picked) >= 2:
+                compose_suggestion = {
+                    "candidates": picked,
+                    "case_sources": {n: contrasts[n]["gained"] for n in picked},
+                    "rationale": "disjoint_gains_no_regressions",
+                }
+            prior_lessons = [
+                view(r) for r in self.rows(session, "evolution_lesson")[-5:]
+            ]
             best = max(candidate_results, key=lambda item: item["score"])
             improves = best["score"] > baseline["score"]
             winner = best if improves else baseline
@@ -107,6 +148,9 @@ class EvolutionService(Service):
                     "winner_score": winner["score"],
                     "recommendation": "keep_baseline" if stable else "review_candidate",
                     "results": candidate_results,
+                    "contrasts": contrasts,
+                    "compose_suggestion": compose_suggestion,
+                    "prior_lessons": prior_lessons,
                     "status": "evaluated",
                     "runtime_changed": False,
                     "scoring_immutable": True,
@@ -201,6 +245,30 @@ class EvolutionService(Service):
             )
             row.payload = json.dumps(data)
             row.revision += 1
+            contrast = data.get("contrasts", {}).get(data["approved_candidate"], {})
+            gained = contrast.get("gained", [])
+            regressed = contrast.get("regressed", [])
+            self.db.add(
+                session,
+                "owner",
+                "evolution_lesson",
+                {
+                    "experiment_id": experiment_id,
+                    "candidate": data["approved_candidate"],
+                    "kind": "adoption",
+                    "lesson": (
+                        f"实验「{data['name']}」采纳 {data['approved_candidate']}："
+                        f"得分 {data['baseline_score']:.2f} → {data['winner_score']:.2f}，"
+                        f"新增通过 {len(gained)} 例，回退 {len(regressed)} 例。"
+                    ),
+                    "evidence": {
+                        "gained": gained,
+                        "regressed": regressed,
+                        "baseline_score": data["baseline_score"],
+                        "winner_score": data["winner_score"],
+                    },
+                },
+            )
             self.db.emit(
                 session,
                 "owner",
@@ -239,6 +307,21 @@ class EvolutionService(Service):
             )
             row.payload = json.dumps(data)
             row.revision += 1
+            self.db.add(
+                session,
+                "owner",
+                "evolution_lesson",
+                {
+                    "experiment_id": experiment_id,
+                    "candidate": data.get("approved_candidate") or data.get("winner"),
+                    "kind": "caution",
+                    "lesson": (
+                        f"实验「{data['name']}」的采纳已回滚；"
+                        "后续提案应先复核该候选在失败样例上的表现。"
+                    ),
+                    "evidence": {"restored": restored_id, "rolled_back_at": now_iso},
+                },
+            )
             self.db.emit(
                 session,
                 "owner",

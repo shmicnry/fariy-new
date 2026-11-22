@@ -19,10 +19,14 @@ import {
     explain,
     watchEvents
 } from './p1.js';
+import {
+    renderDuplex
+} from './duplex.js';
 // No user/provider data is inserted as raw HTML. The service token stays in memory only.
 let token = '',
     stopEvents = null,
     conversation = null;
+let duplex = null;
 let eventRefresh = null;
 let routeDirty = false;
 let pendingUpdates = 0;
@@ -47,10 +51,11 @@ const names = {
     cards: '卡片与通知',
     approvals: '待确认操作',
     chat: '对话',
+    duplex: '全双工对话',
     more: '更多'
 };
 const navGroups = [
-    ['工作台', ['overview', 'chat']],
+    ['工作台', ['overview', 'chat', 'duplex']],
     ['认知', ['mind', 'world', 'memories', 'learning', 'assessments']],
     ['自主能力', ['evolution', 'flows', 'skills', 'mac']],
     ['个人空间', ['pet', 'cards', 'approvals']]
@@ -60,6 +65,7 @@ const mobilePrimaryRoutes = new Set(['overview', 'chat', 'memories', 'learning']
 const iconPaths = {
     overview: ['M4 10.5 12 4l8 6.5V20h-6v-6h-4v6H4z'],
     chat: ['M5 5.5h14v10H9l-4 3z'],
+    duplex: ['M12 4a3 3 0 0 1 3 3v4a3 3 0 0 1-6 0V7a3 3 0 0 1 3-3zM6.5 11a5.5 5.5 0 0 0 11 0M12 16.5V20'],
     mind: ['m12 3 1.4 4.1L17.5 8l-3.4 2.6 1.2 4.2-3.3-2.4-3.3 2.4 1.2-4.2L6.5 8l4.1-.9z'],
     world: ['M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM3.5 12h17M12 3.5c2 2.2 3 5 3 8.5s-1 6.3-3 8.5c-2-2.2-3-5-3-8.5s1-6.3 3-8.5z'],
     memories: ['M6 5.5h11v14l-5.5-3.2L6 19.5z'],
@@ -484,6 +490,8 @@ async function render() {
     $('syncNotice').hidden = true;
     document.querySelector('main').dataset.route = route;
     $('title').textContent = names[route] || 'Fairy';
+    duplex?.dispose();
+    duplex = null;
     $('content').replaceChildren();
     document.querySelectorAll('nav a').forEach(a => {
         const selected = a.hash === '#' + route;
@@ -508,7 +516,9 @@ async function render() {
         controlLabel,
         openDialog,
         closeDialog,
-        refresh: renderPreservingScroll
+        refresh: renderPreservingScroll,
+        showToast,
+        getToken: () => token
     };
     beginRouteLoading(route);
     try {
@@ -551,6 +561,12 @@ async function renderRoute(route, ui) {
     }
     if (route === 'chat') {
         conversation = await renderConversation(ui);
+        return
+    }
+    if (route === 'duplex') {
+        const controller = await renderDuplex(ui);
+        if ((location.hash.slice(1) || 'overview') === 'duplex') duplex = controller;
+        else controller.dispose();
         return
     }
     if (route === 'skills') {
@@ -990,7 +1006,10 @@ $('login').onsubmit = e => {
 run(render);
 saveNotifications();
 
-window.addEventListener('beforeunload', () => stopEvents?.());
+window.addEventListener('beforeunload', () => {
+    stopEvents?.();
+    duplex?.dispose();
+});
 
 $('content').addEventListener('input', () => {
     routeDirty = true;

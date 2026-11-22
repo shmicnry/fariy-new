@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 import os
 import secrets
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Literal
-from fastapi import FastAPI, Depends, Header, HTTPException, Query
+from fastapi import FastAPI, Depends, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
@@ -36,6 +37,7 @@ from .worker import read_status
 from .maintenance import health_status as backup_health_status
 from .voice import SpeechInput, TranscriptionInput, VoiceService
 from .semantic import SemanticService
+from .duplex import DuplexRuntime, DuplexSession
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -324,6 +326,33 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "retrieval_mode": "ollama_semantic_rerank_with_local_character_fallback",
             "semantic_available": True,
         }
+    async def run_turn(text, key, routing="auto"):
+        r = service.start_turn(text, key, routing)
+        if r.pop("_replayed", False) or r["status"] != "pending":
+            with db.sessions() as s:
+                return view(service.get(s, r["id"]))
+        recalled = (await recall_memories(service.recall_query(text)))["results"]
+        context, snapshot = service.model_context(text, recalled=recalled)
+        try:
+            result = await router.answer(r, text, routing, context, snapshot)
+        except asyncio.CancelledError:
+            service.finish_turn(r["id"], error="request_cancelled", snapshot=snapshot)
+            raise
+        except Exception:
+            # No provider text or credentials in errors. Dispatch reservations remain durable.
+            return service.finish_turn(r["id"], error="model_failed", snapshot=snapshot)
+        return service.finish_turn(
+            r["id"],
+            text=result.reply,
+            error=result.error,
+            snapshot=snapshot,
+            metadata=result.route,
+            proposals=result.proposals,
+        )
+
+    duplex = DuplexRuntime(db, service, run_turn, voice)
+    app.state.duplex = duplex
+
     app.state.worker_state_dir = os.getenv("FAIRY_STATE_DIR", "var")
     state_dir = Path(app.state.worker_state_dir).absolute()
     app.state.backup_dir = os.getenv(
@@ -442,6 +471,10 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
             "autonomy_queue": True,
             "autonomy_goal_ledger": True,
             "evolution_lab": True,
+            "evolution_lessons": True,
+            "full_duplex_voice": True,
+            "duplex_delegation": True,
+            "duplex_barge_in": True,
             "worker_status_endpoint": True,
             "cross_page_event_sync": True,
             "local_notification_center": True,
@@ -496,28 +529,7 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
 
     @api.post("/turns")
     async def turn(body: TurnInput, k=Depends(key)):
-        r = service.start_turn(body.text, k, body.routing)
-        if r.pop("_replayed", False) or r["status"] != "pending":
-            with db.sessions() as s:
-                return view(service.get(s, r["id"]))
-        recalled = (await recall_memories(service.recall_query(body.text)))["results"]
-        context, snapshot = service.model_context(body.text, recalled=recalled)
-        try:
-            result = await router.answer(r, body.text, body.routing, context, snapshot)
-        except asyncio.CancelledError:
-            service.finish_turn(r["id"], error="request_cancelled", snapshot=snapshot)
-            raise
-        except Exception:
-            # No provider text or credentials in errors. Dispatch reservations remain durable.
-            return service.finish_turn(r["id"], error="model_failed", snapshot=snapshot)
-        return service.finish_turn(
-            r["id"],
-            text=result.reply,
-            error=result.error,
-            snapshot=snapshot,
-            metadata=result.route,
-            proposals=result.proposals,
-        )
+        return await run_turn(body.text, k, body.routing)
 
     @api.get("/turns")
     def turns():
@@ -1112,6 +1124,22 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     def rollback_experiment(id: str):
         return evolution.rollback(id)
 
+    @api.get("/evolution/lessons")
+    def evolution_lessons():
+        return evolution.list("evolution_lesson")
+
+    @api.get("/duplex/status")
+    def duplex_status():
+        return duplex.status()
+
+    @api.get("/duplex/works")
+    def duplex_works():
+        return service.list("duplex_work")
+
+    @api.post("/duplex/works/{id}/cancel")
+    async def duplex_work_cancel(id: str):
+        return await duplex.cancel_work(id)
+
     @api.get("/cognition/snapshot")
     def cognition():
         return {
@@ -1213,6 +1241,78 @@ def create_app(url=None, token=None, transport=None, secrets_dir=None):
     @api.post("/calls")
     def calls():
         fail(501, "media_transport_not_implemented")
+
+    @app.websocket("/v2/duplex/ws")
+    async def duplex_ws(websocket: WebSocket):
+        await websocket.accept()
+        trusted = {"127.0.0.1", "localhost", "::1", "testclient", "testserver"}
+        if os.getenv("FAIRY_ALLOW_LAN") == "1":
+            trusted.update(
+                item.strip().casefold()
+                for item in os.getenv("FAIRY_ALLOWED_HOSTS", "").split(",")
+                if item.strip()
+            )
+        client_host = (websocket.client.host if websocket.client else "").casefold()
+        if client_host not in trusted:
+            await websocket.close(code=4421)
+            return
+        origin = websocket.headers.get("origin")
+        if origin:
+            host_header = (websocket.headers.get("host") or "").split(":")[0]
+            if (urlparse(origin).hostname or "").casefold() != host_header.casefold():
+                await websocket.close(code=4403)
+                return
+        try:
+            first = await asyncio.wait_for(websocket.receive(), timeout=5)
+        except (asyncio.TimeoutError, WebSocketDisconnect):
+            await websocket.close(code=4401)
+            return
+        if first.get("type") == "websocket.disconnect":
+            return
+        try:
+            hello = json.loads(first.get("text") or "")
+        except ValueError:
+            hello = {}
+        supplied = hello.get("token", "") if isinstance(hello, dict) and hello.get("type") == "auth" else ""
+        authorized = False
+        if secret and isinstance(supplied, str) and secrets.compare_digest(supplied.encode(), secret.encode()):
+            authorized = True
+        elif isinstance(supplied, str) and supplied.startswith("fd_"):
+            authorized = bool(devices.authenticate(supplied))
+        if not authorized:
+            await websocket.close(code=4401)
+            return
+        session = DuplexSession(websocket, duplex, "dx-" + secrets.token_hex(8))
+        duplex.sessions.add(session)
+        await session.send({
+            "type": "ready",
+            "session_id": session.session_id,
+            "state": "idle",
+            "voice": voice.status(),
+            "capabilities": {"barge_in": True, "backchannel_ignore": True, "delegation": True},
+        })
+        duplex.adopt_completed(session)
+        try:
+            while True:
+                raw = await websocket.receive()
+                if raw.get("type") == "websocket.disconnect":
+                    break
+                if raw.get("bytes"):
+                    await session.handle_audio(raw["bytes"])
+                elif raw.get("text"):
+                    try:
+                        msg = json.loads(raw["text"])
+                    except ValueError:
+                        await session.send({"type": "error", "detail": "invalid_json"})
+                        continue
+                    if isinstance(msg, dict):
+                        await session.handle_json(msg)
+                    else:
+                        await session.send({"type": "error", "detail": "invalid_json"})
+        except WebSocketDisconnect:
+            pass
+        finally:
+            session.close()
 
     app.mount("/v2", api)
     root = Path(
